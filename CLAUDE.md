@@ -33,14 +33,14 @@ Our own `astro-ui-design` (status = colour + shape + word, accessibility, tokens
 `.mcp.json` registers the official Figma MCP server (`https://mcp.figma.com/mcp`). Each teammate authorizes it once with their own Figma account (`/mcp` in Claude Code). Use it to pull frames, tokens and components from our Figma file into code.
 
 ## Stack and commands
-React 19 + Vite + TypeScript (Node 22), Tailwind CSS v4 + shadcn/ui, Motion, vite-plugin-pwa. `npm run dev` · `npm run build` · `npm run lint` (oxlint). Imports use `@/` for `src/`.
-- Shared contract: `src/engine/types.ts`. Thresholds: `src/data/indicators.ts`. Tokens: `src/styles/tokens.css` (status colours, night theme via `<html data-theme="night">`).
+React 19 + Vite + TypeScript (Node 22), Tailwind CSS v4 + shadcn/ui, Motion, vite-plugin-pwa. The web app lives in `app/`: run `cd app` first, then `npm run dev` · `npm run build` · `npm run lint` (oxlint) · `node --test tests/readings.test.mjs`. Imports use `@/` for `app/src/`.
+- Shared contract: `app/src/engine/types.ts`. Thresholds: `app/src/data/indicators.ts`. Tokens: `app/src/styles/tokens.css` (status colours, night theme via `<html data-theme="night">`).
 - Add shadcn components with `npx shadcn@latest add <name>`; 21st.dev components with `npx shadcn@latest add "<21st.dev /r/ link>"` (free plan: 2 per day per account).
 - Push to `main` deploys to GitHub Pages (`.github/workflows/deploy.yml`).
 
 ## Working rules
-- Thresholds and guidance text live only in the data file (`src/data/indicators.*`), each with a `sourceUrl`.
-- Components use design tokens only (`src/styles/tokens.css`).
+- Thresholds and guidance text live only in the data file (`app/src/data/indicators.*`), each with a `sourceUrl`.
+- Components use design tokens only (`app/src/styles/tokens.css`).
 - Work on a branch, open a PR, squash-merge; keep `main` deployable.
 - Any AI-assisted code/content: mention in the commit body; AI images get a visible watermark; never use NASA logos/insignia.
 - List every external asset/library in `docs/references.md` as soon as it is added.

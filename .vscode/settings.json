@@ -5,7 +5,7 @@
   "files.eol": "\n",
   "files.insertFinalNewline": true,
   "files.trimTrailingWhitespace": true,
-  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.tsdk": "app/node_modules/typescript/lib",
   "git.autofetch": true,
   "git.pruneOnFetch": true,
   "explorer.fileNesting.enabled": true,
