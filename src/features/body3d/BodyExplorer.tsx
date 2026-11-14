@@ -62,12 +62,12 @@ export function BodyExplorer({ readings, assessments, theme }: Props) {
           </Button>
         )}
         <p className="text-muted-foreground pointer-events-none absolute bottom-3 left-3 text-xs">Drag to rotate · scroll to zoom · select a marker</p>
-        <p className="text-muted-foreground absolute right-3 bottom-3 text-[10px]">
+        <p className="text-muted-foreground absolute top-3 right-3 max-w-[60%] text-right text-[10px] leading-snug">
           Body model:{' '}
           <a className="underline underline-offset-2" href="https://humanatlas.io/3d-reference-library" target="_blank" rel="noreferrer">
             HuBMAP Human Reference Atlas
           </a>
-          , ribs:{' '}
+          ; ribs & heart vessels:{' '}
           <a className="underline underline-offset-2" href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/" target="_blank" rel="noreferrer">
             BodyParts3D © DBCLS
           </a>

@@ -1,4 +1,4 @@
-import { CameraControls, ContactShadows, Html, useProgress } from '@react-three/drei'
+import { CameraControls, ContactShadows, Environment, Html, Lightformer, useProgress } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { Suspense, useEffect, useRef, useState } from 'react'
 import type { BodyRegion, Status } from '@/engine/types'
@@ -98,6 +98,13 @@ export default function Body3D(props: Body3DProps) {
       <directionalLight position={[2, 3, 2]} intensity={theme === 'night' ? 0.6 : 1.3} color={theme === 'night' ? '#ffb27a' : '#ffffff'} />
       <directionalLight position={[-2, 1.5, -2]} intensity={0.45} color={theme === 'night' ? '#ff8a5c' : '#cfe3ff'} />
       <directionalLight position={[0, 1, 3]} intensity={theme === 'night' ? 0.25 : 0.5} />
+
+      <Environment resolution={256} frames={1}>
+        <Lightformer form="rect" intensity={theme === 'night' ? 1.2 : 2.4} color={theme === 'night' ? '#ffb27a' : '#ffffff'} position={[0, 4, 3]} scale={[6, 3, 1]} />
+        <Lightformer form="rect" intensity={theme === 'night' ? 0.6 : 1.2} color={theme === 'night' ? '#ff8a5c' : '#dfeaff'} position={[-4, 1.5, 1]} rotation-y={Math.PI / 2} scale={[4, 2, 1]} />
+        <Lightformer form="rect" intensity={theme === 'night' ? 0.5 : 1} color={theme === 'night' ? '#ffb27a' : '#fff4e8'} position={[4, 1, -1]} rotation-y={-Math.PI / 2} scale={[4, 2, 1]} />
+        <Lightformer form="ring" intensity={theme === 'night' ? 0.4 : 0.8} position={[0, 1, -4]} scale={2} />
+      </Environment>
 
       <Suspense fallback={<Loading />}>
         <Scene {...props} />

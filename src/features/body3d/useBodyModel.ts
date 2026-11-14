@@ -30,9 +30,10 @@ export function useBodyModel(): BodyModelData {
     const meshesByRegion = Object.fromEntries(regionIds.map((id) => [id, [] as THREE.Mesh[]])) as Record<BodyRegion, THREE.Mesh[]>
     scene.traverse((obj) => {
       if (!(obj instanceof THREE.Mesh)) return
-      const region = (obj.material as THREE.Material).name as BodyRegion
+      const [region, part = 'base'] = (obj.material as THREE.Material).name.split(':') as [BodyRegion, string?]
       if (!(region in meshesByRegion)) return
       obj.userData.region = region
+      obj.userData.tissue = `${region}:${part}`
       meshesByRegion[region].push(obj)
     })
 

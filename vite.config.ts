@@ -16,7 +16,7 @@ export default defineConfig({
       includeAssets: ['favicon.svg', 'models/body.glb'],
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,woff2,glb}'],
-        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
       },
       manifest: {
         name: 'Astro Health Monitor',

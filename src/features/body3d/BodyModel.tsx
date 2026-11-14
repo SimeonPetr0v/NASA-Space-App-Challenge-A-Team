@@ -2,12 +2,13 @@ import type { ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import type { BodyRegion, Status } from '@/engine/types'
-import { BODY_HEX, STATUS_HEX } from './palette'
+import { FALLBACK_TISSUE, STATUS_HEX, TISSUE } from './palette'
 import type { BodyModelData } from './useBodyModel'
 
 /*
-  Realistic body from the HuBMAP Human Reference Atlas (CC BY 4.0), prepared by
-  scripts/build-body-model.mjs. Each mesh carries userData.region.
+  Realistic body from the HuBMAP Human Reference Atlas plus BodyParts3D ribs and
+  heart vessels (both CC BY 4.0), prepared by scripts/build-body-model.mjs.
+  Each mesh carries userData.region and userData.tissue (`${region}:${part}`).
 */
 
 type Theme = 'day' | 'night'
@@ -22,16 +23,6 @@ type Props = {
   onHover: (region: BodyRegion | null) => void
 }
 
-const BASE_COLOR: Record<BodyRegion, keyof (typeof BODY_HEX)['day']> = {
-  'whole-body': 'skin',
-  brain: 'brain',
-  eyes: 'eye',
-  heart: 'heart',
-  lungs: 'lungs',
-  immune: 'spleen',
-  musculoskeletal: 'bone',
-}
-
 const regionOf = (obj: THREE.Object3D) => obj.userData.region as BodyRegion | undefined
 
 const pickRegion = (e: ThreeEvent<MouseEvent | PointerEvent>) => {
@@ -39,41 +30,60 @@ const pickRegion = (e: ThreeEvent<MouseEvent | PointerEvent>) => {
   return regions.find((r) => r !== 'whole-body') ?? regions[0]
 }
 
+const allMeshes = (model: BodyModelData) => Object.values(model.meshesByRegion).flat()
+
 export function BodyModel({ model, theme, statusByRegion, selected, hovered, onSelect, onHover }: Props) {
   const materials = useMemo(() => {
-    const entries = (Object.keys(model.meshesByRegion) as BodyRegion[]).map((region) => {
-      const isSkin = region === 'whole-body'
-      const material = new THREE.MeshStandardMaterial({
-        transparent: true,
-        roughness: isSkin ? 0.35 : 0.55,
-        metalness: 0.05,
-        side: isSkin ? THREE.DoubleSide : THREE.FrontSide,
-        depthWrite: !isSkin,
-      })
-      return [region, material] as const
-    })
-    return Object.fromEntries(entries) as Record<BodyRegion, THREE.MeshStandardMaterial>
+    const map = new Map<string, THREE.MeshPhysicalMaterial>()
+    for (const mesh of allMeshes(model)) {
+      const tissue = mesh.userData.tissue as string
+      if (map.has(tissue)) continue
+      const look = TISSUE[tissue] ?? FALLBACK_TISSUE
+      const isSkin = tissue.startsWith('whole-body')
+      map.set(
+        tissue,
+        new THREE.MeshPhysicalMaterial({
+          transparent: true,
+          roughness: look.roughness,
+          metalness: 0,
+          clearcoat: look.clearcoat,
+          clearcoatRoughness: 0.28,
+          sheen: look.sheen ? 0.6 : 0,
+          sheenRoughness: 0.5,
+          sheenColor: new THREE.Color(look.sheen ?? '#000000'),
+          side: isSkin ? THREE.DoubleSide : THREE.FrontSide,
+          depthWrite: !isSkin,
+        }),
+      )
+    }
+    return map
   }, [model])
 
   useEffect(() => {
-    for (const [region, material] of Object.entries(materials) as [BodyRegion, THREE.MeshStandardMaterial][]) {
+    for (const mesh of allMeshes(model)) {
+      const tissue = mesh.userData.tissue as string
+      const region = mesh.userData.region as BodyRegion
+      const material = materials.get(tissue)
+      if (!material) continue
+      mesh.material = material
+      mesh.renderOrder = region === 'whole-body' ? 2 : 1
+    }
+    for (const [tissue, material] of materials) {
+      const region = tissue.split(':')[0] as BodyRegion
+      const look = TISSUE[tissue] ?? FALLBACK_TISSUE
       const isSkin = region === 'whole-body'
       const isActive = selected === region || hovered === region
       const dimmed = selected !== null && selected !== region
-      for (const mesh of model.meshesByRegion[region]) {
-        mesh.material = material
-        mesh.renderOrder = isSkin ? 2 : 1
-      }
-      material.color.set(BODY_HEX[theme][BASE_COLOR[region]])
+      material.color.set(theme === 'night' ? look.night : look.day)
       material.opacity = isSkin ? (dimmed ? 0.04 : selected === region ? 0.35 : 0.14) : dimmed ? (region === 'musculoskeletal' ? 0.3 : 0.12) : 1
       material.depthWrite = !isSkin && !dimmed
       material.emissive.set(isActive ? STATUS_HEX[theme][statusByRegion[region]] : '#000000')
-      material.emissiveIntensity = selected === region ? 0.22 : isActive ? 0.3 : 0
+      material.emissiveIntensity = selected === region ? 0.1 : isActive ? 0.25 : 0
       material.needsUpdate = true
     }
   }, [model, materials, theme, statusByRegion, selected, hovered])
 
-  useEffect(() => () => Object.values(materials).forEach((m) => m.dispose()), [materials])
+  useEffect(() => () => materials.forEach((m) => m.dispose()), [materials])
 
   return (
     <primitive

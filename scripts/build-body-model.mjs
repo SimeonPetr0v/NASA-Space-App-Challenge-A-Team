@@ -51,10 +51,11 @@ const readObj = (path) => {
   return { positions, indices }
 }
 
-const readGroup = (dir, idsFile) => {
+const readGroup = (dir, idsFiles) => {
   const positions = []
   const indices = []
-  for (const id of readFileSync(join_(dir, idsFile), 'utf8').split(/\r?\n/).filter(Boolean)) {
+  const ids = idsFiles.flatMap((f) => readFileSync(join_(dir, f), 'utf8').split(/\r?\n/).filter(Boolean))
+  for (const id of ids) {
     const part = readObj(join_(dir, 'obj', `${id}.obj`))
     const offset = positions.length / 3
     positions.push(...part.positions)
@@ -75,69 +76,89 @@ const boundsOf = (positions) => {
   return { min, max }
 }
 
-async function addRibCage(dir) {
-  const toYUp = (p, mirrorX) => {
-    const out = []
-    for (let i = 0; i < p.length; i += 3) out.push(mirrorX ? -p[i] : p[i], p[i + 2], -p[i + 1])
-    return out
-  }
-  const rib = readGroup(dir, 'ids_FMA7480.txt')
-  const lungsR = readGroup(dir, 'ids_FMA7309.txt')
-  const lungsL = readGroup(dir, 'ids_FMA7310.txt')
-  const heart = readGroup(dir, 'ids_FMA7088.txt')
+const toYUp = (p, mirrorX) => {
+  const out = []
+  for (let i = 0; i < p.length; i += 3) out.push(mirrorX ? -p[i] : p[i], p[i + 2], -p[i + 1])
+  return out
+}
 
-  const nodesOf = (region) => root.listNodes().filter((n) => n.getMesh()?.listPrimitives().some((p) => p.getMaterial()?.getName() === region))
-  const unionBounds = (nodes) => {
-    const b = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }
-    for (const n of nodes) {
-      const nb = getBounds(n)
-      for (let a = 0; a < 3; a++) {
-        b.min[a] = Math.min(b.min[a], nb.min[a])
-        b.max[a] = Math.max(b.max[a], nb.max[a])
-      }
-    }
-    return b
-  }
-  const hraLungs = unionBounds(nodesOf('lungs'))
-  const hraHeart = unionBounds(nodesOf('heart'))
-  const centerX = (b) => (b.min[0] + b.max[0]) / 2
+const nodesOf = (region) => root.listNodes().filter((n) => n.getMesh()?.listPrimitives().some((p) => p.getMaterial()?.getName() === region))
 
-  const bpLungsRaw = boundsOf(toYUp([...lungsR.positions, ...lungsL.positions], false))
-  const bpHeartRaw = boundsOf(toYUp(heart.positions, false))
-  const hraHeartSide = Math.sign(centerX(hraHeart) - centerX(hraLungs))
-  const bpHeartSide = Math.sign(centerX(bpHeartRaw) - centerX(bpLungsRaw))
-  const mirrorX = hraHeartSide !== bpHeartSide
-
-  const bpLungs = boundsOf(toYUp([...lungsR.positions, ...lungsL.positions], mirrorX))
-  const ribY = toYUp(rib.positions, mirrorX)
-  const mapped = new Float32Array(ribY.length)
-  for (let i = 0; i < ribY.length; i += 3) {
+const unionBounds = (nodes) => {
+  const b = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }
+  for (const n of nodes) {
+    const nb = getBounds(n)
     for (let a = 0; a < 3; a++) {
-      const t = (ribY[i + a] - bpLungs.min[a]) / (bpLungs.max[a] - bpLungs.min[a])
-      mapped[i + a] = hraLungs.min[a] + t * (hraLungs.max[a] - hraLungs.min[a])
+      b.min[a] = Math.min(b.min[a], nb.min[a])
+      b.max[a] = Math.max(b.max[a], nb.max[a])
     }
   }
+  return b
+}
 
+const mapBounds = (positions, from, to) => {
+  const out = new Float32Array(positions.length)
+  for (let i = 0; i < positions.length; i += 3) {
+    for (let a = 0; a < 3; a++) {
+      const t = (positions[i + a] - from.min[a]) / (from.max[a] - from.min[a])
+      out[i + a] = to.min[a] + t * (to.max[a] - to.min[a])
+    }
+  }
+  return out
+}
+
+const inflate = (b, k) => {
+  const c = b.min.map((v, a) => (v + b.max[a]) / 2)
+  return { min: b.min.map((v, a) => c[a] + (v - c[a]) * k), max: b.max.map((v, a) => c[a] + (v - c[a]) * k) }
+}
+
+const addPart = (name, positions, indices, materialName, targetTris) => {
   const buffer = root.listBuffers()[0]
-  const position = doc.createAccessor('ribcage_position').setType('VEC3').setArray(mapped).setBuffer(buffer)
-  const index = doc.createAccessor('ribcage_index').setType('SCALAR').setArray(new Uint32Array(rib.indices)).setBuffer(buffer)
-  const material = root.listMaterials().find((m) => m.getName() === 'musculoskeletal')
-  const prim = doc.createPrimitive().setAttribute('POSITION', position).setIndices(index).setMaterial(material)
-  const mesh = doc.createMesh('ribcage').addPrimitive(prim)
-  scene.addChild(doc.createNode('ribcage').setMesh(mesh))
-
+  const material = root.listMaterials().find((m) => m.getName() === materialName)
+  if (!material) throw new Error(`Material not found: ${materialName}`)
+  const position = doc.createAccessor(`${name}_position`).setType("VEC3").setArray(positions).setBuffer(buffer)
+  const index = doc.createAccessor(`${name}_index`).setType("SCALAR").setArray(new Uint32Array(indices)).setBuffer(buffer)
+  const prim = doc.createPrimitive().setAttribute("POSITION", position).setIndices(index).setMaterial(material)
+  scene.addChild(doc.createNode(name).setMesh(doc.createMesh(name).addPrimitive(prim)))
   weldPrimitive(prim)
-  const before = rib.indices.length / 3
-  const simplified = simplifyPrimitive(prim, { simplifier: MeshoptSimplifier, ratio: Math.min(1, 22000 / before), error: 0.5 })
+  const before = indices.length / 3
+  const simplified = simplifyPrimitive(prim, { simplifier: MeshoptSimplifier, ratio: Math.min(1, targetTris / before), error: 0.5 })
+  const after = (simplified.getIndices() ?? simplified.getAttribute("POSITION")).getCount() / 3
+  console.log(`${name.padEnd(16)} ${Math.round(before).toLocaleString().padStart(9)} → ${Math.round(after).toLocaleString()} tris`)
+}
+
+async function addBodyParts3D(dir) {
+  const lungs = readGroup(dir, ["ids_FMA7309.txt", "ids_FMA7310.txt"])
+  const heart = readGroup(dir, ["ids_FMA7088.txt"])
+  const hraLungs = unionBounds(nodesOf("lungs"))
+  const hraHeart = unionBounds(nodesOf("heart"))
+  const centerX = (b) => (b.min[0] + b.max[0]) / 2
+  const bpHeartSide = Math.sign(centerX(boundsOf(toYUp(heart.positions, false))) - centerX(boundsOf(toYUp(lungs.positions, false))))
+  const mirrorX = Math.sign(centerX(hraHeart) - centerX(hraLungs)) !== bpHeartSide
+  console.log("BodyParts3D mirrorX", mirrorX)
+
+  const rib = readGroup(dir, ["ids_FMA7480.txt"])
+  const bpLungs = boundsOf(toYUp(lungs.positions, mirrorX))
+  addPart("ribcage", mapBounds(toYUp(rib.positions, mirrorX), bpLungs, hraLungs), rib.indices, "musculoskeletal", 22000)
+
+  doc.createMaterial("heart:artery").setBaseColorFactor([0.7, 0.08, 0.1, 1]).setRoughnessFactor(0.4).setMetallicFactor(0)
+  doc.createMaterial("heart:vein").setBaseColorFactor([0.2, 0.25, 0.6, 1]).setRoughnessFactor(0.4).setMetallicFactor(0)
+  const arteries = readGroup(dir, ["ids_heart_arteries.txt"])
+  const veins = readGroup(dir, ["ids_heart_veins.txt"])
+  const bpCoronary = boundsOf(toYUp([...arteries.positions, ...veins.positions], mirrorX))
+  const heartTarget = inflate(hraHeart, 1.03)
+  const map = (g) => mapBounds(toYUp(g.positions, mirrorX), bpCoronary, heartTarget)
+  addPart("coronary_arteries", map(arteries), arteries.indices, "heart:artery", 14000)
+  addPart("coronary_veins", map(veins), veins.indices, "heart:vein", 4000)
+
   await doc.transform(normals({ overwrite: false }))
-  console.log(`ribcage          ${Math.round(before).toLocaleString().padStart(9)} → ${Math.round(((simplified.getIndices() ?? simplified.getAttribute("POSITION")).getCount()) / 3).toLocaleString()} tris (mirrorX ${mirrorX})`)
 }
 
 const REGIONS = {
   'whole-body': { nodes: ['VH_M_skin'], targetTris: 45000, color: [0.62, 0.72, 0.79, 1] },
-  brain: { nodes: ['Allen_brain'], targetTris: 30000, maxError: 0.5, color: [0.91, 0.66, 0.7, 1] },
+  brain: { nodes: ['Allen_brain'], targetTris: 60000, maxError: 0.5, color: [0.91, 0.66, 0.7, 1] },
   eyes: { nodes: ['VH_M_eyes'], targetTris: 6000, maxError: 1, color: [0.95, 0.95, 0.93, 1] },
-  heart: { nodes: ['VH_M_heart'], targetTris: 24000, color: [0.78, 0.25, 0.29, 1] },
+  heart: { nodes: ['VH_M_cardiac_chamber'], targetTris: 70000, maxError: 0.2, color: [0.78, 0.25, 0.29, 1] },
   lungs: { nodes: ['VH_M_lungs'], targetTris: 20000, color: [0.89, 0.55, 0.56, 1] },
   immune: { nodes: ['VH_M_spleen'], targetTris: 12000, color: [0.55, 0.23, 0.32, 1] },
   musculoskeletal: { nodes: ['VH_M_vertebral_column', 'VH_M_pelvis', 'VH_M_lower_limb'], targetTris: 45000, maxError: 0.5, color: [0.91, 0.89, 0.83, 1] },
@@ -233,7 +254,7 @@ body.setScale([s, s, s]).setTranslation([-cx * s, -rotated.min[1] * s, -cz * s])
 const final = getBounds(scene)
 console.log('final bounds min', final.min.map((v) => v.toFixed(3)), 'max', final.max.map((v) => v.toFixed(3)))
 
-if (bp3dDir) await addRibCage(bp3dDir)
+if (bp3dDir) await addBodyParts3D(bp3dDir)
 
 await doc.transform(quantize())
 doc.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE })
