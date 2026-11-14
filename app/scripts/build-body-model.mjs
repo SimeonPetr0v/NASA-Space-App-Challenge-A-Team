@@ -216,135 +216,50 @@ async function addBodyParts3D(dir) {
   }
   const SOFT_TISSUE = 0.012
   /*
-    Then the arm and hand bones are fitted slice by slice (1 cm along the
-    height): at each height the bones are centred in the skin arm and shrunk
-    where they are wider than the skin minus a little soft tissue. The
-    BodyParts3D hand is posed with spread fingers in front of the palm, so
-    this pulls it into the skin hand. Near the shoulder the fit fades out so
-    the joint stays where the lungs mapping put it.
+    Then each arm is fitted as a jointed chain, so the bones keep their real
+    shape. The upper arm (humerus), the forearm (radius + ulna) and the hand
+    each move as one rigid piece, stretched only along their own length:
+    - the hand is fitted into the skin hand (one scale per axis) and its
+      spread fingers are drawn in smoothly toward the tips;
+    - the shoulder end of the humerus stays where the lungs mapping put it;
+    - the elbow is placed on the centre line of the skin arm, splitting the
+      shoulder-to-wrist distance in the bones' own length ratio;
+    - the humerus runs shoulder -> elbow and the forearm elbow -> wrist.
+    The skin arm per 1 cm slice is the outermost connected run of skin
+    points, cut off at the gap to the torso.
   */
-  const LIMB_INSET = 0.008
-  const fitLimb = (armPos, handPos, sign) => {
-    const all = new Float32Array(armPos.length + handPos.length)
-    all.set(armPos)
-    all.set(handPos, armPos.length)
+  const fitArmJointed = (humPos, forePos, handPos, sign) => {
+    const all = [...humPos, ...forePos, ...handPos]
     const ab = boundsOf(all)
     const y0 = Math.floor(ab.min[1] * 100)
     const n = Math.floor(ab.max[1] * 100) - y0 + 1
-    const box = () => Array.from({ length: n }, () => ({ x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity }))
-    const bone = box()
-    const flesh = box()
-    const add = (arr, x, y, z) => {
-      const k = Math.floor(y * 100) - y0
-      if (k < 0 || k >= n) return
-      const b = arr[k]
-      b.x0 = Math.min(b.x0, x)
-      b.x1 = Math.max(b.x1, x)
-      b.z0 = Math.min(b.z0, z)
-      b.z1 = Math.max(b.z1, z)
-    }
-    for (let i = 0; i < all.length; i += 3) add(bone, all[i], all[i + 1], all[i + 2])
-    /* Skin arm per slice: the outermost connected run of skin, cut off at the gap to the torso */
+    const flesh = Array.from({ length: n }, () => null)
     const bySlice = Array.from({ length: n }, () => [])
     for (let i = 0; i < skin.length; i += 3) {
-      const k = Math.floor(skin[i + 1] * 100) - y0
       if (skin[i] * sign <= 0.1) continue
+      const k = Math.floor(skin[i + 1] * 100) - y0
       for (let j = Math.max(0, k - 2); j <= Math.min(n - 1, k + 2); j++) bySlice[j].push(skin[i], skin[i + 2])
     }
     bySlice.forEach((pts, k) => {
       const order = []
       for (let i = 0; i < pts.length; i += 2) order.push(i)
       order.sort((a, b) => pts[b] * sign - pts[a] * sign)
+      const f = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity }
       let last = Infinity
       for (const i of order) {
         const d = pts[i] * sign
-        if (last - d > 0.04) {
-          if (last !== Infinity) break
-        }
+        if (last !== Infinity && last - d > 0.04) break
         last = d
-        add(flesh, pts[i], (k + y0 + 0.5) / 100, pts[i + 1])
+        f.x0 = Math.min(f.x0, pts[i])
+        f.x1 = Math.max(f.x1, pts[i])
+        f.z0 = Math.min(f.z0, pts[i + 1])
+        f.z1 = Math.max(f.z1, pts[i + 1])
       }
-      const f = flesh[k]
-      if (f.x1 - f.x0 > 0.22) flesh[k] = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity }
+      if (Number.isFinite(f.x0) && f.x1 - f.x0 <= 0.22) flesh[k] = f
     })
-    const raw = bone.map((b, k) => {
-      const f = flesh[k]
-      if (!Number.isFinite(b.x0) || !Number.isFinite(f.x0)) return null
-      const half = (lo, hi) => Math.max(0.001, (hi - lo) / 2)
-      return {
-        bx: (b.x0 + b.x1) / 2,
-        bz: (b.z0 + b.z1) / 2,
-        sx: (f.x0 + f.x1) / 2,
-        sz: (f.z0 + f.z1) / 2,
-        kx: Math.min(1, Math.max(0.2, (half(f.x0, f.x1) - LIMB_INSET) / half(b.x0, b.x1))),
-        kz: Math.min(1, Math.max(0.2, (half(f.z0, f.z1) - LIMB_INSET) / half(b.z0, b.z1))),
-      }
-    })
-    const W = 1
-    const smooth = raw.map((_, k) => {
-      const acc = { bx: 0, bz: 0, sx: 0, sz: 0, kx: 0, kz: 0 }
-      let c = 0
-      for (let j = Math.max(0, k - W); j <= Math.min(n - 1, k + W); j++) {
-        const r = raw[j]
-        if (!r) continue
-        for (const key in acc) acc[key] += r[key]
-        c++
-      }
-      if (!c) return null
-      for (const key in acc) acc[key] /= c
-      return acc
-    })
-    const fadeTop = ab.max[1] - 0.06
-    const fadeBottom = ab.max[1] - 0.2
-    const apply = (pos) => {
-      const out = new Float32Array(pos.length)
-      for (let i = 0; i < pos.length; i += 3) {
-        const [x, y, z] = [pos[i], pos[i + 1], pos[i + 2]]
-        const r = smooth[Math.min(n - 1, Math.max(0, Math.floor(y * 100) - y0))]
-        const t = Math.min(1, Math.max(0, (fadeTop - y) / (fadeTop - fadeBottom)))
-        const w = t * t * (3 - 2 * t)
-        if (!r || w === 0) {
-          out.set([x, y, z], i)
-          continue
-        }
-        const fx = r.sx + (x - r.bx) * r.kx
-        const fz = r.sz + (z - r.bz) * r.kz
-        out[i] = x + (fx - x) * w
-        out[i + 1] = y
-        out[i + 2] = z + (fz - z) * w
-      }
-      return out
-    }
-    /*
-      The hand is fitted as one piece (a single scale + move per axis), not
-      slice by slice, so the fingers keep their shape. Its box is the skin
-      hand found by the slices above, minus a little soft tissue. The forearm
-      is then bent smoothly from the elbow down so its end meets the wrist.
-    */
-    const hb = boundsOf(handPos)
-    const sb = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }
-    for (let k = Math.floor(hb.min[1] * 100) - y0; k <= Math.floor(hb.max[1] * 100) - y0; k++) {
-      const f = flesh[k]
-      if (!f || !Number.isFinite(f.x0)) continue
-      sb.min[0] = Math.min(sb.min[0], f.x0)
-      sb.max[0] = Math.max(sb.max[0], f.x1)
-      sb.min[2] = Math.min(sb.min[2], f.z0)
-      sb.max[2] = Math.max(sb.max[2], f.z1)
-    }
-    const inset = 0.006
-    const target = {
-      min: [sb.min[0] + inset, hb.min[1], sb.min[2] + inset],
-      max: [sb.max[0] - inset, hb.max[1], sb.max[2] - inset],
-    }
-    const hand = mapBounds(handPos, hb, target)
-    /* The skin fingers are held together, the bone fingers spread: draw them in smoothly toward the tips */
-    const FINGER_TAPER = 0.3
-    const handCx = (target.min[0] + target.max[0]) / 2
-    for (let i = 0; i < hand.length; i += 3) {
-      const t = (hb.max[1] - hand[i + 1]) / (hb.max[1] - hb.min[1])
-      hand[i] = handCx + (hand[i] - handCx) * (1 - FINGER_TAPER * t * t)
-    }
-    const arm = apply(armPos)
+    const sliceAt = (y) => flesh[Math.min(n - 1, Math.max(0, Math.floor(y * 100) - y0))]
+
+    /* Centre of the vertices within 1.5 cm of a segment's top or bottom end */
     const endCentre = (pos, top) => {
       const b = boundsOf(pos)
       const c = [0, 0, 0]
@@ -352,28 +267,99 @@ async function addBodyParts3D(dir) {
       for (let i = 0; i < pos.length; i += 3) {
         if (top ? pos[i + 1] < b.max[1] - 0.015 : pos[i + 1] > b.min[1] + 0.015) continue
         c[0] += pos[i]
+        c[1] += pos[i + 1]
         c[2] += pos[i + 2]
         m++
       }
-      return [c[0] / m, 0, c[2] / m]
+      return c.map((v) => v / m)
     }
+    const sub = (a, b) => a.map((v, i) => v - b[i])
+    const add = (a, b) => a.map((v, i) => v + b[i])
+    const mul = (a, k) => a.map((v) => v * k)
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
+    const len = (a) => Math.hypot(...a)
+    const unit = (a) => mul(a, 1 / (len(a) || 1))
+    /* Rotation taking unit vector u onto unit vector v (Rodrigues) */
+    const rotation = (u, v) => {
+      const axis = cross(u, v)
+      const s = len(axis)
+      const c = dot(u, v)
+      if (s < 1e-9) return (p) => p
+      const k = mul(axis, 1 / s)
+      return (p) => add(add(mul(p, c), mul(cross(k, p), s)), mul(k, dot(k, p) * (1 - c)))
+    }
+    /* Move a rigid segment so a0 -> a1 and b0 -> b1, stretching only along its own axis */
+    const place = (pos, a0, b0, a1, b1) => {
+      const u0 = unit(sub(b0, a0))
+      const u1 = unit(sub(b1, a1))
+      const k = len(sub(b1, a1)) / len(sub(b0, a0))
+      const rot = rotation(u0, u1)
+      const out = new Float32Array(pos.length)
+      for (let i = 0; i < pos.length; i += 3) {
+        const d = [pos[i] - a0[0], pos[i + 1] - a0[1], pos[i + 2] - a0[2]]
+        const along = dot(d, u0)
+        const local = add(mul(u0, along * k), sub(d, mul(u0, along)))
+        out.set(add(a1, rot(local)), i)
+      }
+      return out
+    }
+
+    /* Hand: one scale per axis into the skin hand box, then the finger taper */
+    const hb = boundsOf(handPos)
+    const sb = { min: [Infinity, 0, Infinity], max: [-Infinity, 0, -Infinity] }
+    for (let y = hb.min[1]; y <= hb.max[1]; y += 0.01) {
+      const f = sliceAt(y)
+      if (!f) continue
+      sb.min[0] = Math.min(sb.min[0], f.x0)
+      sb.max[0] = Math.max(sb.max[0], f.x1)
+      sb.min[2] = Math.min(sb.min[2], f.z0)
+      sb.max[2] = Math.max(sb.max[2], f.z1)
+    }
+    const inset = 0.006
+    const target = { min: [sb.min[0] + inset, hb.min[1], sb.min[2] + inset], max: [sb.max[0] - inset, hb.max[1], sb.max[2] - inset] }
+    const hand = mapBounds(handPos, hb, target)
+    const FINGER_TAPER = 0.3
+    const handCx = (target.min[0] + target.max[0]) / 2
+    for (let i = 0; i < hand.length; i += 3) {
+      const t = (hb.max[1] - hand[i + 1]) / (hb.max[1] - hb.min[1])
+      hand[i] = handCx + (hand[i] - handCx) * (1 - FINGER_TAPER * t * t)
+    }
+
+    /* Joints */
+    const shoulder = endCentre(humPos, true)
+    const elbowH = endCentre(humPos, false)
+    const elbowF = endCentre(forePos, true)
+    const wristF = endCentre(forePos, false)
     const wrist = endCentre(hand, true)
-    const forearmEnd = endCentre(arm, false)
-    const armB = boundsOf(arm)
-    const elbow = (armB.min[1] + armB.max[1]) / 2
-    for (let i = 0; i < arm.length; i += 3) {
-      const t = Math.min(1, Math.max(0, (elbow - arm[i + 1]) / (elbow - armB.min[1])))
-      const w = t * t * (3 - 2 * t)
-      arm[i] += (wrist[0] - forearmEnd[0]) * w
-      arm[i + 2] += (wrist[2] - forearmEnd[2]) * w
+    const lh = len(sub(elbowH, shoulder))
+    const lf = len(sub(wristF, elbowF))
+    /* Elbow height from the bone length ratio; its x/z from the skin arm (smoothed over 5 cm). Where the arm touches the torso the slice runs on into the body, so x is taken at most ARM_HALF in from the outer edge. */
+    const ARM_HALF = 0.042
+    const ey = shoulder[1] + (wrist[1] - shoulder[1]) * (lh / (lh + lf))
+    const c = [0, 0]
+    let m = 0
+    for (let y = ey - 0.025; y <= ey + 0.025; y += 0.01) {
+      const f = sliceAt(y)
+      if (!f) continue
+      c[0] += sign > 0 ? Math.max((f.x0 + f.x1) / 2, f.x1 - ARM_HALF) : Math.min((f.x0 + f.x1) / 2, f.x0 + ARM_HALF)
+      c[1] += (f.z0 + f.z1) / 2
+      m++
     }
-    return { arm, hand }
+    const straight = add(shoulder, mul(sub(wrist, shoulder), lh / (lh + lf)))
+    const elbow = m ? [c[0] / m, ey, c[1] / m] : straight
+    const hum = place(humPos, shoulder, elbowH, shoulder, elbow)
+    const fore = place(forePos, elbowF, wristF, elbow, wrist)
+    console.log(`arm joints ${sign > 0 ? 'left' : 'right'}: elbow ${elbow.map((v) => v.toFixed(3)).join(', ')}, humerus ${lh.toFixed(3)} -> ${len(sub(elbow, shoulder)).toFixed(3)} m, forearm ${lf.toFixed(3)} -> ${len(sub(wrist, elbow)).toFixed(3)} m`)
+    return { hum, fore, hand }
   }
   const hands = handBoneConcepts(dir)
   for (const side of ["right", "left"]) {
     const r = side === "right"
     const girdle = concepts(r ? "FMA13322" : "FMA13323", r ? "FMA13395" : "FMA13396")
-    const arm = concepts(r ? "FMA23130" : "FMA23131", r ? "FMA23464" : "FMA23465", r ? "FMA23467" : "FMA23468")
+    const humerus = concepts(r ? "FMA23130" : "FMA23131")
+    const forearm = concepts(r ? "FMA23464" : "FMA23465", r ? "FMA23467" : "FMA23468")
+    const arm = { positions: [...humerus.positions, ...forearm.positions], indices: [...humerus.indices, ...forearm.indices.map((i) => i + humerus.positions.length / 3)] }
     const hand = concepts(...hands.filter((h) => h.side === side).map((h) => h.concept))
     const armPos = fromLungs(arm)
     const handPos = fromLungs(hand)
@@ -392,8 +378,11 @@ async function addBodyParts3D(dir) {
     to.min[1] = lowest + SOFT_TISSUE
     console.log(`arm fit ${side}: outer x ${(from.max[0] * sign > 0 ? from.max[0] : -from.min[0]).toFixed(3)} → ${(outer - SOFT_TISSUE).toFixed(3)}, bottom ${from.min[1].toFixed(3)} → ${to.min[1].toFixed(3)}`)
     addPart(`shoulder_${side}`, fromLungs(girdle), girdle.indices, "musculoskeletal", 4000)
-    const fit = fitLimb(mapBounds(armPos, from, to), mapBounds(handPos, from, to), sign)
-    addPart(`arm_${side}`, fit.arm, arm.indices, "musculoskeletal", 6000)
+    const fit = fitArmJointed(fromLungs(humerus), fromLungs(forearm), mapBounds(handPos, from, to), sign)
+    const armFit = new Float32Array(fit.hum.length + fit.fore.length)
+    armFit.set(fit.hum)
+    armFit.set(fit.fore, fit.hum.length)
+    addPart(`arm_${side}`, armFit, arm.indices, "musculoskeletal", 6000)
     addPart(`hand_${side}`, fit.hand, hand.indices, "musculoskeletal", 6000)
   }
 
