@@ -4,8 +4,8 @@ import { isReading, readingError } from '../engine/validate'
 export const READINGS_KEY = 'astro-health-readings-v1'
 type StoragePort = Pick<Storage, 'getItem' | 'setItem'>
 
-export function loadReadings(storage: StoragePort): Reading[] {
-  const raw = storage.getItem(READINGS_KEY)
+export function loadReadings(storage: StoragePort, key: string = READINGS_KEY): Reading[] {
+  const raw = storage.getItem(key)
   if (raw === null) return []
   const data: unknown = JSON.parse(raw)
   if (!Array.isArray(data) || !data.every(isReading)) {
@@ -14,11 +14,11 @@ export function loadReadings(storage: StoragePort): Reading[] {
   return data
 }
 
-export function saveReading(storage: StoragePort, readings: Reading[], reading: Reading): Reading[] {
+export function saveReading(storage: StoragePort, readings: Reading[], reading: Reading, key: string = READINGS_KEY): Reading[] {
   const error = readingError(reading)
   if (error) throw new Error(error)
   const next = [...readings, reading]
-  storage.setItem(READINGS_KEY, JSON.stringify(next))
+  storage.setItem(key, JSON.stringify(next))
   return next
 }
 

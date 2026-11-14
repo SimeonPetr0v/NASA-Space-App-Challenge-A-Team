@@ -177,3 +177,25 @@ test('keeps older stored readings when current entry limits tighten', () => {
   const old = [reading('hr', 900), reading('exercise', 1440), reading('mood', 2)]
   assert.deepEqual(loadReadings({ getItem: () => JSON.stringify(old) }), old)
 })
+
+test('keeps each crew member in separate storage, CM-2 on the original key', async () => {
+  const { storageKey } = await import('../src/data/crew.ts')
+  const map = new Map()
+  const storage = { getItem: (k) => map.get(k) ?? null, setItem: (k, v) => map.set(k, v) }
+  assert.equal(storageKey(READINGS_KEY, 'cm2'), READINGS_KEY)
+  saveReading(storage, [], reading('hr', 70), storageKey(READINGS_KEY, 'cm1'))
+  saveReading(storage, [], reading('hr', 90), storageKey(READINGS_KEY, 'cm3'))
+  assert.equal(loadReadings(storage, storageKey(READINGS_KEY, 'cm1'))[0].value, 70)
+  assert.equal(loadReadings(storage, storageKey(READINGS_KEY, 'cm3'))[0].value, 90)
+  assert.deepEqual(loadReadings(storage), [])
+})
+
+test('demo crew covers nominal, caution and act now', async () => {
+  const { DEMO_HISTORY_BY_CREW } = await import('../src/data/demo-readings.ts')
+  const { latestReadings: latest, summarize } = await import('../src/engine/assess.ts')
+  const overall = (id) => {
+    const h = DEMO_HISTORY_BY_CREW[id]
+    return summarize(latest(h).map((r) => assess(r, h))).overall
+  }
+  assert.deepEqual(['cm1', 'cm2', 'cm3'].map(overall), ['normal', 'caution', 'danger'])
+})

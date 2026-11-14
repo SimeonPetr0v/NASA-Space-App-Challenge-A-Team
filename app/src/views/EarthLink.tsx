@@ -6,6 +6,7 @@ import { Send, Stethoscope } from 'lucide-react'
 import { Panel, PanelHeader } from '@/components/Panel'
 import { StatusBadge } from '@/components/StatusBadge'
 import { Action } from '@/components/ui/action'
+import { CREW, CREW_ORDER, DEFAULT_CREW } from '@/data/crew'
 import { INDICATORS } from '@/data/indicators'
 import { MISSIONS } from '@/data/missions'
 import { formatValue, worstStatus } from '@/engine/assess'
@@ -13,7 +14,7 @@ import type { LinkMessage } from '@/engine/types'
 import { countdown, delayText, utcTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useSimNow, useStore } from '@/state/store'
-import { useHealth } from '@/state/useHealth'
+import { useCrewHealth, useHealth } from '@/state/useHealth'
 
 /*
   Flight surgeon view (docs/flight-surgeon-view.md). Reports and replies travel
@@ -30,6 +31,8 @@ const REPLIES = [
 ]
 
 const SPEEDS = [1, 60, 600]
+
+const crewOf = (m: LinkMessage) => m.payload.crewId ?? DEFAULT_CREW
 
 const lastArrival = (messages: LinkMessage[], direction: LinkMessage['direction'], now: number) => {
   const times = messages.filter((m) => m.direction === direction).map((m) => Date.parse(m.arrivesAt)).filter((t) => t <= now)
@@ -81,7 +84,7 @@ function ReportBody({ msg }: { msg: LinkMessage }) {
 
 export function EarthLink() {
   const store = useStore()
-  const { messages, mode, delaySec, marsDelayMin, setMarsDelayMin, clock, setSpeed, sendReport, sendReply } = store
+  const { messages, crewId, setCrew, mode, delaySec, marsDelayMin, setMarsDelayMin, clock, setSpeed, sendReport, sendReply } = store
   const { readings, assessments } = useHealth()
   const now = useSimNow(250)
   const mission = MISSIONS[mode]
@@ -89,6 +92,8 @@ export function EarthLink() {
   const replies = messages.filter((m) => m.kind === 'reply')
   const inbox = reports.filter((m) => now >= Date.parse(m.arrivesAt))
   const inFlight = messages.filter((m) => now < Date.parse(m.arrivesAt))
+  const mine = messages.filter((m) => crewOf(m) === crewId)
+  const crewHealth = useCrewHealth()
 
   return (
     <>
@@ -156,7 +161,7 @@ export function EarthLink() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel aria-labelledby="crew-title">
-          <PanelHeader id="crew-title" title="Crew side" meta="CM-2 (synthetic) · guidance is shown immediately" />
+          <PanelHeader id="crew-title" title="Crew side" meta={`${CREW[crewId].callsign} (synthetic) · guidance is shown immediately`} />
           <div className="border-border flex flex-wrap gap-2 border-b p-4 sm:p-5">
             <Action variant="primary" onClick={() => sendReport(assessments, readings, 'Health report')}>
               <Send aria-hidden="true" /> Send health report
@@ -166,8 +171,8 @@ export function EarthLink() {
             </Action>
           </div>
           <ul aria-label="Crew messages" className="divide-border divide-y">
-            {messages.length === 0 && <li className="text-muted-foreground p-4 text-sm sm:p-5">No messages yet. Send a report to start the link.</li>}
-            {[...messages]
+            {mine.length === 0 && <li className="text-muted-foreground p-4 text-sm sm:p-5">No messages yet. Send a report to start the link.</li>}
+            {[...mine]
               .filter((m) => m.direction === 'to-earth' || now >= Date.parse(m.arrivesAt))
               .reverse()
               .map((m) => (
@@ -180,7 +185,7 @@ export function EarthLink() {
                 </li>
               ))}
             {replies
-              .filter((m) => now < Date.parse(m.arrivesAt))
+              .filter((m) => crewOf(m) === crewId && now < Date.parse(m.arrivesAt))
               .map((m) => (
                 <li key={`pending-${m.id}`} className="bg-muted/50 p-4 sm:p-5">
                   <p className="label text-muted-foreground">Reply from Earth on its way</p>
@@ -200,6 +205,33 @@ export function EarthLink() {
               </span>
             }
           />
+          <div className="border-border border-b p-4 sm:p-5">
+            <p className="label text-muted-foreground">Crew status</p>
+            <ul aria-label="Crew status" className="mt-2 grid gap-1.5">
+              {CREW_ORDER.map((id) => {
+                const { summary } = crewHealth[id]
+                const off = summary.counts.caution + summary.counts.danger
+                return (
+                  <li key={id}>
+                    <button
+                      type="button"
+                      onClick={() => setCrew(id)}
+                      aria-pressed={crewId === id}
+                      className={cn(
+                        'flex min-h-11 w-full items-center gap-3 rounded-sm border px-3 text-left text-sm transition-colors',
+                        crewId === id ? 'border-foreground bg-muted' : 'border-border hover:border-border-strong hover:bg-muted',
+                      )}
+                    >
+                      <span className="num w-10 font-semibold">{CREW[id].callsign}</span>
+                      <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">{CREW[id].role}</span>
+                      <span className="num text-muted-foreground text-xs">{off ? `${off} off-nominal` : 'all nominal'}</span>
+                      <StatusBadge status={summary.overall} className="w-20 justify-end" />
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
           <ul aria-label="Flight surgeon inbox" className="divide-border divide-y">
             {inbox.length === 0 && (
               <li className="text-muted-foreground p-4 text-sm sm:p-5">
@@ -211,7 +243,7 @@ export function EarthLink() {
               return (
                 <li key={m.id} className="p-4 sm:p-5">
                   <p className="label text-muted-foreground">
-                    Received <span className="num">{utcTime(Date.parse(m.arrivesAt))} UTC</span> · sent <span className="num">{utcTime(Date.parse(m.createdAt))}</span>
+                    <span className="text-foreground font-semibold">{CREW[crewOf(m)].callsign}</span> · Received <span className="num">{utcTime(Date.parse(m.arrivesAt))} UTC</span> · sent <span className="num">{utcTime(Date.parse(m.createdAt))}</span>
                   </p>
                   <ReportBody msg={m} />
                   {replied ? (
@@ -239,7 +271,7 @@ export function EarthLink() {
           </ul>
         </Panel>
       </div>
-      <p className="text-muted-foreground text-xs">Simulated link. Reply templates are examples, not medical instructions. Crew member and messages are synthetic.</p>
+      <p className="text-muted-foreground text-xs">Simulated link. Reply templates are examples, not medical instructions. Crew members and messages are synthetic.</p>
       <div>
         <Action variant="ghost" onClick={store.resetDemo}>
           Reset link and settings

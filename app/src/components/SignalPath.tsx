@@ -1,6 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { EASE_OUT } from '@/components/motion-config'
 import type { LinkMessage, MissionMode } from '@/engine/types'
+import { CREW, DEFAULT_CREW } from '@/data/crew'
 import { countdown } from '@/lib/format'
 
 /*
@@ -280,7 +281,7 @@ export function SignalPath({ mode, inFlight, now, lastToEarth, lastToCrew }: Pro
             transition: 'left 250ms linear, top 250ms linear',
           }}
         >
-          {toEarth ? 'Report' : 'Reply'} · {countdown(e - now)}
+          {toEarth ? 'Report' : 'Reply'} · {CREW[m.payload.crewId ?? DEFAULT_CREW].callsign} · {countdown(e - now)}
         </span>
       ))}
 
