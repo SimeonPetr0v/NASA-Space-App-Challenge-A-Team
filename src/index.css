@@ -15,6 +15,7 @@
     --color-status-caution-bg: var(--status-caution-bg);
     --color-status-danger-bg: var(--status-danger-bg);
     --color-surface-2: var(--surface-2);
+    --color-stage: var(--stage);
     --color-ring: var(--ring);
     --color-input: var(--input);
     --color-border: var(--border);
@@ -39,27 +40,28 @@
     --radius-xl: 14px;
 }
 
-/* Day: "cabin" palette (docs/design-direction.md §5) */
+/* Day: "imaging room" palette — pale clinical blue, navy ink (docs/design-direction.md §5) */
 :root {
-    --background: #EEF1F3;
-    --foreground: #14202B;
-    --card: #FFFFFF;
-    --card-foreground: #14202B;
-    --popover: #FFFFFF;
-    --popover-foreground: #14202B;
-    --surface-2: #F6F8F9;
-    --primary: #1F5AA6;
+    --background: #E3EDF7;
+    --foreground: #10233A;
+    --card: #F2F7FC;
+    --card-foreground: #10233A;
+    --popover: #F2F7FC;
+    --popover-foreground: #10233A;
+    --surface-2: #E9F1FA;
+    --stage: #D5E2EF;
+    --primary: #1D5FB8;
     --primary-foreground: #FFFFFF;
-    --secondary: #F6F8F9;
-    --secondary-foreground: #14202B;
-    --muted: #F6F8F9;
-    --muted-foreground: #5B6B78;
-    --accent: #E8EEF6;
-    --accent-foreground: #1F5AA6;
-    --destructive: #C2342B;
-    --border: #D6DEE4;
-    --input: #C9D3DB;
-    --ring: #1F5AA6;
+    --secondary: #E9F1FA;
+    --secondary-foreground: #10233A;
+    --muted: #E9F1FA;
+    --muted-foreground: #4E6278;
+    --accent: #D6E5F6;
+    --accent-foreground: #174E98;
+    --destructive: #B83227;
+    --border: #CAD8E6;
+    --input: #B8C9DA;
+    --ring: #1D5FB8;
     --radius: 6px;
 }
 

@@ -1,6 +1,6 @@
 import { ArrowLeft, ExternalLink, Plus } from 'lucide-react'
 import { RangeGauge } from '@/components/RangeGauge'
-import { StatusBadge } from '@/components/StatusBadge'
+import { STATUS_META, StatusBadge } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import type { Mission } from '@/data/mission'
 import type { BodyRegion, IndicatorId } from '@/engine/types'
@@ -40,6 +40,26 @@ function Row({ row, onSelect }: { row: InstrumentRow; onSelect: () => void }) {
           <span className="text-muted-foreground ml-auto text-xs tabular">{delta(row.baselineDeltaPct)}</span>
         </span>
         <RangeGauge gauge={row.gauge} value={row.gaugeValue} baseline={row.baseline} />
+      </button>
+    </li>
+  )
+}
+
+function CompactRow({ row, onSelect }: { row: InstrumentRow; onSelect: () => void }) {
+  const { Icon, text } = STATUS_META[row.assessment.status]
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-label={`${row.def.label}, ${formatValue(row.reading.value)} ${row.def.unit}, ${STATUS_META[row.assessment.status].word}`}
+        className="hover:bg-muted/70 -mx-2 flex min-h-11 w-[calc(100%+1rem)] items-center gap-3 rounded-md px-2 text-left transition-colors duration-150"
+      >
+        <Icon size={16} strokeWidth={2.25} className={text} aria-hidden="true" />
+        <span className="text-sm">{row.def.label}</span>
+        <span className="ml-auto text-sm font-semibold tabular">
+          {formatValue(row.reading.value)} <span className="text-muted-foreground font-normal">{row.def.unit}</span>
+        </span>
       </button>
     </li>
   )
@@ -126,17 +146,38 @@ export function Instruments({ rows, mission, selectedRegion, selectedId, onSelec
 
   if (detail) return <Detail row={detail} onBack={() => onSelect(null)} />
 
+  const attention = rows.filter((r) => r.assessment.status === 'caution' || r.assessment.status === 'danger')
+  const fine = rows.filter((r) => !attention.includes(r))
+
   return (
     <div className="flex flex-col">
-      <div className="mb-1 flex items-baseline justify-between">
-        <h2 className="text-base font-semibold">Today's readings</h2>
-        <span className="text-muted-foreground text-xs tabular">Next check {mission.nextCheck}</span>
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-base font-semibold">Needs attention</h2>
+        <span className="text-muted-foreground text-xs tabular">{attention.length} of {rows.length}</span>
       </div>
-      <ul>
-        {rows.map((row) => (
-          <Row key={row.id} row={row} onSelect={() => onSelect(row)} />
-        ))}
-      </ul>
+      {attention.length === 0 ? (
+        <p className="text-muted-foreground py-3 text-sm">Everything is within your limits. Next check {mission.nextCheck}.</p>
+      ) : (
+        <ul className="mt-1">
+          {attention.map((row) => (
+            <Row key={row.id} row={row} onSelect={() => onSelect(row)} />
+          ))}
+        </ul>
+      )}
+
+      {fine.length > 0 && (
+        <>
+          <div className="mt-5 flex items-baseline justify-between border-t pt-4">
+            <h2 className="text-base font-semibold">Within your limits</h2>
+            <span className="text-muted-foreground text-xs tabular">Next check {mission.nextCheck}</span>
+          </div>
+          <ul className="mt-1">
+            {fine.map((row) => (
+              <CompactRow key={row.id} row={row} onSelect={() => onSelect(row)} />
+            ))}
+          </ul>
+        </>
+      )}
       <Button onClick={onLog} className="mt-3 min-h-11">
         <Plus size={16} aria-hidden="true" />
         Log reading

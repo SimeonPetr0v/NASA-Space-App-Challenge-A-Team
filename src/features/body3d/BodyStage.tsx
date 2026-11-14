@@ -25,7 +25,7 @@ export function BodyStage({ theme, statusByRegion, selected, onSelect }: Props) 
   const [webgl] = useState(hasWebGL)
 
   return (
-    <section aria-label="Body" className="relative h-[60svh] min-h-[22rem] w-full lg:h-full">
+    <section aria-label="Body" className="bg-stage relative h-[60svh] min-h-[22rem] w-full lg:h-full" style={{ backgroundImage: "radial-gradient(60% 55% at 50% 42%, color-mix(in oklab, var(--card) 70%, transparent) 0%, transparent 100%)" }}>
       {webgl ? (
         <Suspense fallback={<p className="text-muted-foreground p-6 text-sm">Loading body model…</p>}>
           <Body3D theme={theme} statusByRegion={statusByRegion} selected={selected} onSelect={onSelect} />

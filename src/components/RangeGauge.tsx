@@ -1,10 +1,10 @@
 import type { Gauge } from '@/data/indicator-display'
 import { cn } from '@/lib/utils'
 
-const ZONE_BG = {
-  normal: 'bg-status-ok-bg',
-  caution: 'bg-status-caution-bg',
-  danger: 'bg-status-danger-bg',
+const ZONE_COLOR = {
+  normal: 'var(--status-ok)',
+  caution: 'var(--status-caution)',
+  danger: 'var(--status-danger)',
 }
 
 type Props = {
@@ -17,7 +17,7 @@ type Props = {
 
 /*
   Where today's value sits within the danger / caution / normal zones.
-  The dark marker is today's value; the hollow tick is the astronaut's baseline.
+  The solid marker is today's value; the small notch is the astronaut's usual.
 */
 export function RangeGauge({ gauge, value, baseline, showScale, className }: Props) {
   const min = gauge.zones[0].from
@@ -27,22 +27,31 @@ export function RangeGauge({ gauge, value, baseline, showScale, className }: Pro
 
   return (
     <div className={cn('w-full', className)} aria-hidden="true">
-      <div className="relative h-2 w-full">
-        <div className="absolute inset-0 flex overflow-hidden rounded-full">
+      <div className="relative h-2.5 w-full">
+        <div className="absolute inset-y-0.5 inset-x-0 flex gap-[2px] overflow-hidden rounded-full">
           {gauge.zones.map((z) => (
-            <span key={`${z.from}-${z.to}`} className={ZONE_BG[z.status]} style={{ width: `${((z.to - z.from) / (max - min)) * 100}%` }} />
+            <span
+              key={`${z.from}-${z.to}`}
+              style={{
+                width: `${((z.to - z.from) / (max - min)) * 100}%`,
+                background: `color-mix(in oklab, ${ZONE_COLOR[z.status]} ${z.status === 'normal' ? 30 : 24}%, var(--card))`,
+              }}
+            />
           ))}
         </div>
         {baseline !== undefined && (
-          <span className="border-muted-foreground absolute top-1/2 h-3.5 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full border bg-card" style={{ left: pct(baseline) }} />
+          <span className="bg-muted-foreground absolute -top-0.5 h-1.5 w-[2px] -translate-x-1/2 rounded-full" style={{ left: pct(baseline) }} />
         )}
-        <span className="bg-foreground ring-card absolute top-1/2 h-4 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2" style={{ left: pct(value) }} />
+        <span
+          className="bg-foreground absolute top-1/2 h-4 w-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{ left: pct(value), boxShadow: '0 0 0 2px var(--card)' }}
+        />
       </div>
       {showScale && (
         <div className="text-muted-foreground relative mt-1.5 h-4 text-[11px] tabular">
           {edges.map((e) => (
             <span key={e} className="absolute -translate-x-1/2" style={{ left: pct(e) }}>
-              {e}
+              {Math.round(e * 10) / 10}
             </span>
           ))}
         </div>

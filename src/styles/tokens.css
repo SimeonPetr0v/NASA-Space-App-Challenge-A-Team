@@ -1,17 +1,18 @@
 /*
   Design tokens shared by the whole app (docs/design-direction.md §5).
   Components use these tokens (directly or via Tailwind classes such as
-  text-status-caution), never raw hex values.
+  text-status-caution), never raw hex values. Every text/background pair
+  here is checked for WCAG AA (4.5:1 for text).
 */
 
 :root {
-  --status-ok: #1E7F4F;
-  --status-caution: #B57800;
-  --status-danger: #C2342B;
-  --status-none: #7A8894;
-  --status-ok-bg: #E3F2EA;
-  --status-caution-bg: #FBF0D9;
-  --status-danger-bg: #FBE4E2;
+  --status-ok: #17784A;
+  --status-caution: #8F5A00;
+  --status-danger: #B83227;
+  --status-none: #5C6F83;
+  --status-ok-bg: #DDF0E5;
+  --status-caution-bg: #FAEBCB;
+  --status-danger-bg: #F8DEDB;
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
@@ -20,37 +21,40 @@
 }
 
 /*
-  Sleep-shift night mode (docs/night-mode.md): warm, low-luminance, no blue.
+  Sleep-shift night mode (docs/night-mode.md): warm charcoal surfaces with
+  explicit elevation steps, soft parchment text (low chroma, not saturated
+  amber), no blue. Accent and status colours are muted so nothing glares.
   Activated with <html data-theme="night">.
 */
 :root[data-theme='night'] {
-  --background: #140C08;
-  --foreground: #F0C9A0;
-  --card: #1D130D;
-  --card-foreground: #F0C9A0;
-  --popover: #1D130D;
-  --popover-foreground: #F0C9A0;
-  --surface-2: #24180F;
-  --primary: #E39A4C;
-  --primary-foreground: #140C08;
-  --secondary: #24180F;
-  --secondary-foreground: #F0C9A0;
-  --muted: #24180F;
-  --muted-foreground: #BF9A78;
-  --accent: #33220F;
-  --accent-foreground: #F0B878;
-  --destructive: #E2583A;
-  --border: #3A2A1F;
-  --input: #4A3627;
-  --ring: #E39A4C;
+  --background: #17130F;
+  --foreground: #EADBC8;
+  --card: #1F1A15;
+  --card-foreground: #EADBC8;
+  --popover: #27211B;
+  --popover-foreground: #EADBC8;
+  --surface-2: #27211B;
+  --stage: #120F0C;
+  --primary: #D9A15F;
+  --primary-foreground: #1A140E;
+  --secondary: #27211B;
+  --secondary-foreground: #EADBC8;
+  --muted: #27211B;
+  --muted-foreground: #B3A18C;
+  --accent: #33281D;
+  --accent-foreground: #E8B87A;
+  --destructive: #E07A5F;
+  --border: #3A3129;
+  --input: #4A3F35;
+  --ring: #D9A15F;
 
-  --status-ok: #BFAE5A;
-  --status-caution: #E6A03C;
-  --status-danger: #E2583A;
-  --status-none: #8B7A66;
-  --status-ok-bg: #2A2410;
-  --status-caution-bg: #33230C;
-  --status-danger-bg: #3A1810;
+  --status-ok: #A9B97A;
+  --status-caution: #E0A84E;
+  --status-danger: #E07A5F;
+  --status-none: #8C7D6C;
+  --status-ok-bg: #262A1A;
+  --status-caution-bg: #33281A;
+  --status-danger-bg: #3A211B;
 }
 
 @media (prefers-reduced-motion: reduce) {

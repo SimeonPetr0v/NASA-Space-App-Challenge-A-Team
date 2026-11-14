@@ -17,7 +17,7 @@ export function Rail({ view, onChange }: Props) {
   return (
     <nav
       aria-label="Main"
-      className="bg-card fixed inset-x-0 bottom-0 z-30 border-t md:static md:border-t-0 md:border-r"
+      className="bg-card fixed inset-x-0 bottom-0 z-30 border-t md:static md:border-t-0 md:bg-transparent"
     >
       <ul className="flex justify-around md:flex-col md:justify-start md:gap-1 md:p-3">
         {VIEWS.map(({ id, label, Icon }) => {
