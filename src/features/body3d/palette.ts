@@ -6,8 +6,8 @@ import type { Status } from '@/engine/types'
   kickoff freezes the colours.
 */
 export const STATUS_HEX: Record<'day' | 'night', Record<Status, string>> = {
-  day: { normal: '#2f9e6a', caution: '#e0a526', danger: '#d9452e', 'no-data': '#8a8a8a', stale: '#8a8a8a' },
-  night: { normal: '#b9a64a', caution: '#e39a3a', danger: '#d9542f', 'no-data': '#8b7a66', stale: '#8b7a66' },
+  day: { normal: '#388d68', caution: '#c97a00', danger: '#d02c2a', 'no-data': '#83868c', stale: '#83868c' },
+  night: { normal: '#b8ac68', caution: '#eeb154', danger: '#ec563d', 'no-data': '#99816e', stale: '#99816e' },
 }
 
 /*
