@@ -1,7 +1,8 @@
-import { BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, RadioTower, Rocket, Sparkles, Users } from 'lucide-react'
+import { BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Menu, Moon, RadioTower, Rocket, Sparkles, Users } from 'lucide-react'
 import { useEffect, useId, useRef, useState, type CSSProperties } from 'react'
 import { FEATURES } from '@/config/features'
 import { href, type Route } from '@/state/route'
+import { useStore } from '@/state/store'
 import './solar-nav.css'
 
 /*
@@ -29,6 +30,8 @@ const LEAVE_MS = 220
 
 export function SolarNav({ route }: { route: Route }) {
   const pages = PAGES.filter((p) => p.on)
+  const lunar = useStore().theme === 'dark'
+  const HubIcon = lunar ? Moon : Menu
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLElement>(null)
   const sun = useRef<HTMLButtonElement>(null)
@@ -96,7 +99,7 @@ export function SolarNav({ route }: { route: Route }) {
       <button
         ref={sun}
         type="button"
-        className="solar-sun"
+        className={lunar ? 'solar-sun solar-moon' : 'solar-sun'}
         aria-expanded={open}
         aria-controls={id}
         aria-label={open ? 'Close the page menu' : 'Open the page menu'}
@@ -106,7 +109,12 @@ export function SolarNav({ route }: { route: Route }) {
           openedAt.current = performance.now()
           setOpen((o) => !o)
         }}
-      />
+      >
+        <span className="solar-hub-face" aria-hidden="true">
+          <HubIcon className="solar-hub-icon" strokeWidth={2} />
+          <span className="solar-hub-text">{open ? 'Close' : 'Menu'}</span>
+        </span>
+      </button>
       <ul id={id} className="solar-list">
         {pages.map((p, i) => {
           const a = ((180 - ARC_DEG / 2 + (ARC_DEG * i) / Math.max(1, pages.length - 1)) * Math.PI) / 180

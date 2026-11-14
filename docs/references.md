@@ -32,8 +32,10 @@ Every external resource used in the project (required by the submission form, ev
 | WebLLM (MLC AI) 0.2.87 | Library | https://github.com/mlc-ai/web-llm | Apache-2.0 | TOT: runs the language model in the browser with WebGPU, in a Web Worker |
 | Llama 3.2 1B Instruct (Meta), MLC q4f16_1 build | AI model, downloaded on first use | https://huggingface.co/mlc-ai/Llama-3.2-1B-Instruct-q4f16_1-MLC | Llama 3.2 Community License | TOT default model; weights are fetched by the user's browser, not stored in this repo |
 | Qwen2.5 0.5B / 1.5B Instruct (Alibaba), MLC q4f16_1 builds | AI model, downloaded on first use | https://huggingface.co/mlc-ai/Qwen2.5-0.5B-Instruct-q4f16_1-MLC | Apache-2.0 | Optional smaller / larger TOT models |
+| Oxanium (Severin Meyer), @fontsource-variable/oxanium | Font | https://github.com/sevmeyer/oxanium | SIL OFL 1.1 | Headings, brand and key labels |
 | Space Grotesk (Florian Karsten), @fontsource-variable/space-grotesk | Font | https://github.com/floriankarsten/space-grotesk | SIL OFL 1.1 | Interface text and numbers |
 | JetBrains Mono, @fontsource/jetbrains-mono | Font | https://github.com/JetBrains/JetBrainsMono | SIL OFL 1.1 | Small technical labels |
+| Wikipedia — Khonsu; Thoth | Encyclopedia | https://en.wikipedia.org/wiki/Khonsu , https://en.wikipedia.org/wiki/Thoth | CC BY-SA 4.0 (facts paraphrased, not copied) | “About the names” on the Mission brief page |
 | CSA — Monitoring Radiation for Astronaut Health | Partner agency | https://www.asc-csa.gc.ca/eng/news/articles/2026/2026-02-26-monitoring-radiation-astronaut-health.asp | Public | Radiation indicator |
 | anthropics/skills — frontend-design, webapp-testing | Dev tooling | https://github.com/anthropics/skills | Apache-2.0 | AI assistant guidance (not shipped in app) |
 | Impeccable (Paul Bakaus) | Dev tooling | https://github.com/pbakaus/impeccable | Apache-2.0 | AI design critique/audit (not shipped in app) |

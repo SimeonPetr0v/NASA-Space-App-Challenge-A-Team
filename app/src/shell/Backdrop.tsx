@@ -1,7 +1,7 @@
 /*
   Page background: a quiet star field, an orbital chart centred on the sun
-  of the page menu (right edge, middle) and a planetary contour globe in the
-  lower left. Inline vector art in theme tokens, kept low-contrast so it
+  of the page menu (right edge, middle), lunar surface contours in the upper
+  left and a planetary contour globe in the lower left. Inline vector art in theme tokens, kept low-contrast so it
   never competes with the content. Static: no motion to reduce.
 */
 
@@ -13,6 +13,17 @@ const STARS = Array.from({ length: 70 }, (_, i) => {
 })
 
 const ORBITS = [230, 330, 450, 590, 760, 960]
+
+/* Lunar surface: crater rims as pairs of rings (x, y, r) and a terminator curve */
+const CRATERS: [number, number, number][] = [
+  [120, 140, 62],
+  [300, 90, 28],
+  [250, 260, 40],
+  [430, 200, 18],
+  [60, 330, 24],
+  [380, 330, 12],
+  [180, 40, 14],
+]
 
 export function Backdrop() {
   return (
@@ -42,6 +53,17 @@ export function Backdrop() {
           const r1 = i % 3 === 0 ? 990 : 975
           return <line key={i} x1={Math.cos(a) * r0} y1={Math.sin(a) * r0} x2={Math.cos(a) * r1} y2={Math.sin(a) * r1} stroke="var(--orbit-tick)" strokeWidth={1} />
         })}
+      </svg>
+
+      <svg viewBox="0 0 520 420" className="absolute -top-10 -left-16 h-[420px] w-[520px] opacity-80">
+        <path d="M-20 380 C 140 300, 300 330, 540 210" fill="none" stroke="var(--orbit-line)" />
+        <path d="M-20 400 C 150 330, 320 360, 540 250" fill="none" stroke="var(--orbit-line)" strokeDasharray="1 7" />
+        {CRATERS.map(([x, y, r]) => (
+          <g key={`${x}-${y}`} fill="none">
+            <circle cx={x} cy={y} r={r} stroke="var(--orbit-line)" />
+            <circle cx={x + r * 0.12} cy={y + r * 0.1} r={r * 0.78} stroke="var(--orbit-line)" strokeDasharray="2 4" />
+          </g>
+        ))}
       </svg>
 
       <svg viewBox="-400 -400 800 800" className="absolute -bottom-[340px] -left-[300px] h-[760px] w-[760px]">

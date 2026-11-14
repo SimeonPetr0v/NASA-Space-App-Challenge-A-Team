@@ -2,6 +2,7 @@ import { AnimatePresence, MotionConfig, motion } from 'motion/react'
 import { lazy, Suspense, useEffect } from 'react'
 import { TransmitOverlay } from '@/components/TransmitOverlay'
 import { AppShell } from '@/shell/AppShell'
+import { playIntro } from '@/shell/intro'
 import { useRoute } from '@/state/route'
 import { StoreProvider, useStore } from '@/state/store'
 import { EarthLink } from '@/views/EarthLink'
@@ -21,6 +22,10 @@ const TotPage = lazy(() => import('@/features/tot/TotPage').then((m) => ({ defau
 function Screens() {
   const { route, param } = useRoute()
   const { theme } = useStore()
+
+  useEffect(() => {
+    playIntro()
+  }, [])
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme

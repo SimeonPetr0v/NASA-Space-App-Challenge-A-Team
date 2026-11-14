@@ -1,13 +1,12 @@
-import { Sparkles, Users, BedDouble, BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, RadioTower, Rocket } from 'lucide-react'
+import { Sparkles, BedDouble, BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, RadioTower, Rocket } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { CrewSwitcher } from '@/components/CrewSwitcher'
 import { FEATURES } from '@/config/features'
 import { PlayDemoButton } from '@/features/demo/DemoPlayer'
-import { CREW } from '@/data/crew'
 import { DEMO_TODAY } from '@/data/demo-readings'
 import { MISSION_DAY_TODAY, MISSION_ORDER, MISSIONS } from '@/data/missions'
 import type { MissionMode } from '@/engine/types'
-import { delayText, pad, utcTime } from '@/lib/format'
+import { pad, utcTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { href, type Route } from '@/state/route'
 import { useSimNow, useStore } from '@/state/store'
@@ -53,56 +52,8 @@ export function Wordmark({ className }: { className?: string }) {
       <svg viewBox="0 0 24 24" className="size-5 shrink-0" aria-hidden="true">
         <path d="M2 13h5l2-6 3.5 11 2.5-8 1.5 3H22" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="square" strokeLinejoin="miter" />
       </svg>
-      <span className="text-[0.9375rem] leading-none font-semibold tracking-tight whitespace-nowrap">Khonsu</span>
+      <span className="font-display text-base leading-none font-semibold tracking-[0.06em] whitespace-nowrap uppercase">Khonsu</span>
     </span>
-  )
-}
-
-function SideNav({ route }: { route: Route }) {
-  const { mode, delaySec, crewId } = useStore()
-  const base = useNav()
-  /* Crew board sits after Overview on desktop; on phones it is reached from the crew switcher */
-  const nav = FEATURES.crewBoard ? [base[0], { route: 'crew' as Route, label: 'Crew board', icon: Users }, ...base.slice(1)] : base
-  const m = MISSIONS[mode]
-  return (
-    <aside className="bg-chrome text-chrome-foreground sticky top-0 hidden h-svh w-60 shrink-0 flex-col lg:flex">
-      <div className="border-chrome-line flex h-14 items-center border-b px-5">
-        <Wordmark />
-      </div>
-      <nav aria-label="Main" className="flex flex-col gap-px p-3">
-        {nav.map(({ route: r, label, icon: Icon }) => (
-          <a
-            key={r}
-            href={href(r)}
-            aria-current={route === r ? 'page' : undefined}
-            className={cn(
-              'flex min-h-11 items-center gap-3 rounded-sm px-3 text-sm transition-colors',
-              route === r ? 'bg-chrome-2 text-chrome-foreground font-medium' : 'text-chrome-muted hover:bg-chrome-2/60 hover:text-chrome-foreground',
-            )}
-          >
-            <Icon className="size-4" strokeWidth={1.75} aria-hidden="true" />
-            {label}
-            {route === r && <span aria-hidden="true" className="bg-chrome-foreground ml-auto h-4 w-px" />}
-          </a>
-        ))}
-      </nav>
-      <div className="border-chrome-line mt-auto border-t p-5 text-xs">
-        <p className="label text-chrome-muted">Mission profile</p>
-        <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-          <dt className="text-chrome-muted">Phase</dt>
-          <dd className="text-right">{m.name}</dd>
-          <dt className="text-chrome-muted">Gravity</dt>
-          <dd className="num text-right">{m.gravity}</dd>
-          <dt className="text-chrome-muted">Signal delay</dt>
-          <dd className="num text-right">{delayText(delaySec)} one way</dd>
-          <dt className="text-chrome-muted">Crew member</dt>
-          <dd className="text-right">{CREW[crewId].callsign} (synthetic)</dd>
-          <dt className="text-chrome-muted">Role</dt>
-          <dd className="text-right">{CREW[crewId].role}</dd>
-        </dl>
-        <p className="text-chrome-muted mt-5 leading-relaxed">Demo data. Supports self-assessment only; does not diagnose.</p>
-      </div>
-    </aside>
   )
 }
 
@@ -158,13 +109,12 @@ function TopBar({ route }: { route: Route }) {
     <header className="bg-card/95 border-border relative z-30 border-b backdrop-blur sm:sticky sm:top-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:h-14 sm:flex-nowrap sm:px-6 sm:py-0">
         <div className="min-w-0 flex-1 overflow-hidden">
-          <span className="lg:hidden">
-            <Wordmark />
-          </span>
-          <p className="hidden text-sm lg:block">
-            <span className="text-muted-foreground">Crew health</span>
-            <span className="text-subtle-foreground px-2" aria-hidden="true">/</span>
-            <span className="font-semibold">{TITLES[route]}</span>
+          <p className="flex min-w-0 items-center gap-3">
+            <a href={href('overview')} className="shrink-0 rounded-sm" aria-label="Khonsu, go to Overview">
+              <Wordmark />
+            </a>
+            <span className="text-subtle-foreground hidden lg:inline" aria-hidden="true">/</span>
+            <span className="hidden truncate text-sm font-medium lg:inline">{TITLES[route]}</span>
           </p>
         </div>
         <dl className="text-muted-foreground hidden items-center gap-5 text-xs xl:flex">
@@ -230,7 +180,6 @@ export function AppShell({ route, children }: { route: Route; children: ReactNod
       <a href="#main" className="bg-primary text-primary-foreground sr-only z-50 px-4 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2">
         Skip to content
       </a>
-      <SideNav route={route} />
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar route={route} />
         <main id="main" className="flex-1 pb-20 lg:pb-0">

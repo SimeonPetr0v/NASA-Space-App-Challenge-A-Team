@@ -162,7 +162,7 @@ export function TotPage() {
   return (
     <>
       <PageBanner eyebrow="On-device assistant" title="Ask TOT">
-        TOT explains your health data in plain words. It runs on this device, works offline once downloaded and sends nothing anywhere. It does not diagnose.
+        TOT, named after Thoth, the Egyptian god of wisdom and writing, explains your health data in plain words. It runs on this device, works offline once downloaded and sends nothing anywhere. It does not diagnose.
       </PageBanner>
       <Page className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <Panel aria-labelledby="tot-chat" className="flex min-h-[28rem] flex-col">

@@ -1,4 +1,5 @@
 import { ClosingBand, HazardGrid, VitalsMarquee } from '@/components/ShowcaseSections'
+import { NameOrigins } from '@/components/NameOrigins'
 import { SpaceHero } from '@/components/SpaceHero'
 import { Page } from '@/shell/Page'
 
@@ -14,6 +15,7 @@ export function Brief() {
       <VitalsMarquee />
       <Page className="grid grid-cols-[minmax(0,1fr)] gap-16 pt-16 pb-20">
         <HazardGrid />
+        <NameOrigins />
       </Page>
       <ClosingBand />
     </>
