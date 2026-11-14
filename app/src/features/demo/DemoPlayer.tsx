@@ -8,11 +8,13 @@ import { cn } from '@/lib/utils'
 import { navigate, type Route } from '@/state/route'
 import { useStore } from '@/state/store'
 import { useHealth } from '@/state/useHealth'
+import { changeTheme } from '@/shell/theme-transition'
 
 /*
   "Play demo" (features.playDemo): runs the whole story by itself with
   captions, for the 30-second video and for judges who do not click around.
-  Uses the app's real actions (crew, mission, report, reply, clock, night).
+  Uses the app's real actions (crew, mission, log, TOT summary, report,
+  reply, clock, crew board, themes and sleep shift).
 */
 
 
@@ -44,7 +46,7 @@ export function PlayDemoButton({ className }: { className?: string }) {
   )
 }
 
-const STEPS = 9
+const STEPS = 12
 
 export function DemoPlayer() {
   const on = useRunning()
@@ -83,6 +85,12 @@ export function DemoPlayer() {
     }
     const s = () => ref.current.store
 
+    const click = (text: string) => {
+      const el = [...document.querySelectorAll('button')].find((x) => x.textContent?.includes(text))
+      el?.click()
+      return !!el
+    }
+
     const run = async () => {
       s().clearTransmission()
       s().setTheme('day')
@@ -92,40 +100,53 @@ export function DemoPlayer() {
       s().setSpeed(1)
       await go('overview')
       window.scrollTo({ top: 0, behavior: 'smooth' })
-      say(1, 'Day 47 of a Mars transit, 14 light-minutes from Earth. CM-2 runs the morning check.')
-      await wait(4200)
+      say(1, 'Khonsu checks a crew’s health far from Earth. Day 47 of a Mars transit, 14 light-minutes away.')
+      await wait(4500)
       scrollToId('status')
-      say(2, 'Heart rate 108 and temperature 37.9 °C: caution. The guidance appears at once; nobody waits for Earth.')
+      say(2, 'CM-2’s morning check: heart rate 108 and 37.9 °C. Khonsu says what to do now; nobody waits for Earth.')
       await wait(5000)
       scrollToId('trend-title')
-      say(3, 'Trend watch catches slow changes, and the radiation budget tracks dose against NASA’s 600 mSv career limit.')
+      say(3, 'Trend watch catches slow changes before a limit is crossed; the radiation budget tracks NASA’s 600 mSv career limit.')
       await wait(5000)
       scrollToId('body-title')
-      say(4, 'The 3D body shows which systems need attention.')
-      await wait(4500)
+      say(4, 'The 3D body shows which systems need attention. Drag to turn it, scroll to zoom where you point.')
+      await wait(5000)
+      await go('log')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      say(5, 'Logging takes seconds. A fingertip on the camera measures the pulse, on a phone or a laptop.')
+      await wait(5000)
+      await go('tot')
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      say(6, 'TOT, an AI that runs on the device, explains the readings in plain words, offline, with its sources.')
+      await wait(1200)
+      click('Basic summary')
+      await wait(4800)
       await go('link')
-      say(5, 'The report leaves for Earth with the real light delay.')
+      say(7, 'The report leaves for Earth with the real light delay.')
       const { assessments, readings } = ref.current.health
       const report: LinkMessage = s().sendReport(assessments, readings, 'Health report')
       await wait(5200)
       s().clearTransmission()
       scrollToId('link-title')
       s().setSpeed(600)
-      say(6, 'Demo clock ×600: fourteen minutes pass in seconds while the crew is already acting.')
+      say(8, 'Demo clock ×600: fourteen minutes pass in seconds while the crew is already acting.')
       await until(() => s().simNow() >= Date.parse(report.arrivesAt))
       await wait(1200)
       s().sendReply(report, 'Rest for the remainder of this shift and increase fluids to 2.5 L today.')
-      say(7, 'The flight surgeon replies. The answer needs another fourteen minutes to come back.')
+      say(9, 'The flight surgeon replies; the answer takes another fourteen minutes to come back.')
       await wait(4500)
       s().setSpeed(1)
       await go('crew')
-      say(8, 'The crew medical officer sees the whole crew at once: CM-3 needs action now.')
+      say(10, 'The crew medical officer sees the whole crew at once: CM-3 needs action now.')
       await wait(5000)
-      s().setTheme('night')
+      changeTheme(s().setTheme, 'dark')
+      say(11, 'Light and dark themes fit any cabin light…')
+      await wait(3500)
+      changeTheme(s().setTheme, 'night')
       await go('sleep')
-      say(9, 'At night the whole app switches to low-blue colours for the sleep shift.')
+      say(12, '…and at night the sleep shift switches to warm, low-blue colours.')
       await wait(5000)
-      s().setTheme('day')
+      changeTheme(s().setTheme, 'day')
       await go('overview')
       window.scrollTo({ top: 0, behavior: 'smooth' })
       stopDemo()

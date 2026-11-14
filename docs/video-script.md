@@ -4,7 +4,7 @@ Record the live app with **Play demo** (top bar). It runs the story by itself wi
 
 | Time | On screen (Play demo step) | Voice-over |
 |---|---|---|
-| 0–4 s | Overview, Mars transit, day 47, "14 min one way" | "Day 47. Fourteen light-minutes from Earth. No doctor on board can be reached live." |
+| 0–4 s | Overview (Khonsu), Mars transit, day 47, "14 min one way" | "Day 47. Fourteen light-minutes from Earth. No doctor on board can be reached live." |
 | 4–9 s | Status: **CAUTION**, heart rate 108, temperature 37.9 °C, guidance | "The morning check finds a fever and a fast pulse. The app tells the astronaut what to do right now." |
 | 9–13 s | Trend watch + radiation budget | "It also catches slow changes before they cross a limit, and tracks radiation against NASA's career limit." |
 | 13–16 s | 3D body with status markers | "The body shows which systems need attention." |

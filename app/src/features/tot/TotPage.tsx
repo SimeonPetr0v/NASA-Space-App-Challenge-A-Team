@@ -1,14 +1,14 @@
-import { Cpu, Download, ListChecks, Send, Square, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Cpu, Download, ListChecks, Send, Square, Trash2 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { PageBanner } from '@/components/PageBanner'
 import { Panel, PanelHeader } from '@/components/Panel'
 import { Action } from '@/components/ui/action'
-import { TOT_CHAT_KEY, TOT_MAX_MESSAGES, TOT_MODEL_KEY, TOT_MODELS } from '@/config/tot'
+import { TOT_CHAT_KEY, TOT_MAX_MESSAGES, TOT_MODEL_KEY, TOT_MODELS, TOT_PHONE_DEFAULT } from '@/config/tot'
 import { cn } from '@/lib/utils'
 import { Page } from '@/shell/Page'
 import { useStore } from '@/state/store'
 import { useHealth } from '@/state/useHealth'
-import { loadEngine, modelCached, webgpuAvailable, type Engine } from './engine'
+import { explainError, gpuInfo, loadEngine, modelCached, type Engine } from './engine'
 import { buildFacts } from './facts'
 import { SUGGESTED, systemPrompt } from './prompt'
 import { retrieve } from './retrieve'
@@ -27,13 +27,22 @@ type Status = 'checking' | 'unsupported' | 'idle' | 'loading' | 'ready' | 'error
 /* One engine for the whole app session, so leaving the page does not unload the model */
 let current: { engine: Engine; worker: Worker; modelId: string } | null = null
 
+/* Whether this device's graphics chip has 16-bit float shaders; null until checked */
+let deviceF16: boolean | null = null
+const isPhone = () => window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 768
 const readModel = () => {
+  const fallback = isPhone() ? TOT_PHONE_DEFAULT : TOT_MODELS[0].id
   try {
     const id = localStorage.getItem(TOT_MODEL_KEY)
-    return TOT_MODELS.some((m) => m.id === id) ? id! : TOT_MODELS[0].id
+    return TOT_MODELS.some((m) => m.id === id) ? id! : fallback
   } catch {
-    return TOT_MODELS[0].id
+    return fallback
   }
+}
+/** The build to load: f16 where the chip supports it, otherwise the f32 build of the same model */
+const buildOf = (id: string) => {
+  const m = TOT_MODELS.find((x) => x.id === id) ?? TOT_MODELS[0]
+  return deviceF16 === false ? m.f32Id : m.id
 }
 const chatKey = (crew: string) => `${TOT_CHAT_KEY}:${crew}`
 const readChat = (crew: string): Message[] => {
@@ -73,6 +82,16 @@ export function TotPage() {
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const end = useRef<HTMLDivElement>(null)
+  /* Where the Start TOT panel is while it is off screen, for the floating arrow */
+  const modelPanel = useRef<HTMLDivElement>(null)
+  const [panelAt, setPanelAt] = useState<'above' | 'below' | null>(null)
+  useEffect(() => {
+    const el = modelPanel.current
+    if (!el) return
+    const io = new IntersectionObserver(([e]) => setPanelAt(e.isIntersecting ? null : e.boundingClientRect.top < 0 ? 'above' : 'below'), { threshold: 0.25 })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
   const facts = useMemo(() => buildFacts({ crewId, mode, history, health }), [crewId, mode, history, health])
   const model = TOT_MODELS.find((m) => m.id === modelId)!
 
@@ -97,12 +116,12 @@ export function TotPage() {
         current = null
       }
       if (!current) {
-        const loaded = await loadEngine(id, (r) => setProgress({ pct: Math.round(r.progress * 100), text: r.text }))
+        const loaded = await loadEngine(buildOf(id), (r) => setProgress({ pct: Math.round(r.progress * 100), text: r.text }))
         current = { ...loaded, modelId: id }
       }
       setStatus('ready')
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(explainError(e))
       setStatus('error')
     }
   }
@@ -111,11 +130,13 @@ export function TotPage() {
     if (current) return
     let gone = false
     void (async () => {
-      if (!(await webgpuAvailable())) {
+      const gpu = await gpuInfo()
+      deviceF16 = gpu.f16
+      if (!gpu.ok) {
         if (!gone) setStatus('unsupported')
         return
       }
-      if (await modelCached(modelId)) {
+      if (await modelCached(buildOf(modelId))) {
         if (!gone) void start(modelId)
       } else if (!gone) setStatus('idle')
     })()
@@ -255,6 +276,7 @@ export function TotPage() {
         </Panel>
 
         <div className="grid content-start gap-6">
+          <div ref={modelPanel} className="scroll-mt-24">
           <Panel aria-labelledby="tot-model">
             <PanelHeader id="tot-model" title="Language model" meta="WebLLM · WebGPU" />
             <div className="grid gap-3 p-4 text-sm sm:p-5">
@@ -322,6 +344,7 @@ export function TotPage() {
               </Action>
             </div>
           </Panel>
+          </div>
           <Panel aria-labelledby="tot-rules">
             <PanelHeader id="tot-rules" title="How TOT answers" />
             <ul className="text-muted-foreground grid gap-2 p-4 text-sm sm:p-5">
@@ -333,6 +356,19 @@ export function TotPage() {
           </Panel>
         </div>
       </Page>
+      {status !== 'ready' && status !== 'loading' && status !== 'checking' && panelAt && (
+        <button
+          type="button"
+          onClick={() => modelPanel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+          className={cn(
+            'bg-primary text-primary-foreground fixed left-1/2 z-40 flex min-h-11 -translate-x-1/2 items-center gap-2 rounded-full px-5 text-sm font-semibold shadow-[var(--shadow-pop)]',
+            panelAt === 'below' ? 'bottom-20 lg:bottom-6' : 'top-20',
+          )}
+        >
+          {panelAt === 'below' ? <ArrowDown className="size-4" aria-hidden="true" /> : <ArrowUp className="size-4" aria-hidden="true" />}
+          {status === 'unsupported' ? 'Basic summary' : 'Start TOT'}
+        </button>
+      )}
     </>
   )
 }
