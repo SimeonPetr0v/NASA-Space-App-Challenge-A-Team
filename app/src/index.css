@@ -99,6 +99,16 @@
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
+  /* Browser surfaces carry the palette too: selection, caret, form accents, scrollbars */
+  ::selection {
+    background: color-mix(in oklch, var(--teal) 28%, transparent);
+    color: var(--foreground);
+  }
+  html {
+    accent-color: var(--primary);
+    caret-color: var(--primary);
+    scrollbar-color: var(--border-strong) transparent;
+  }
 }
 
 @layer components {

@@ -218,7 +218,7 @@ export function TotPage() {
                   type="button"
                   disabled={status !== 'ready' || busy}
                   onClick={() => void ask(q)}
-                  className="border-border-strong hover:bg-muted min-h-9 rounded-full border px-3 text-xs disabled:opacity-50"
+                  className="border-border-strong hover:bg-muted min-h-11 rounded-full border px-3 text-xs disabled:opacity-50 md:min-h-9"
                 >
                   {q}
                 </button>
@@ -307,7 +307,7 @@ export function TotPage() {
               {status === 'loading' && (
                 <div role="status" className="grid gap-2">
                   <div className="bg-muted h-2 overflow-hidden rounded-full">
-                    <div className="bg-primary h-full transition-[width] duration-300" style={{ width: `${progress.pct}%` }} />
+                    <div className="bg-primary h-full origin-left transition-transform duration-300" style={{ transform: `scaleX(${progress.pct / 100})` }} />
                   </div>
                   <p className="text-muted-foreground text-xs break-words">{progress.text}</p>
                 </div>

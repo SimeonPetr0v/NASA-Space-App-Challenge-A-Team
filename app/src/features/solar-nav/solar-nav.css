@@ -162,9 +162,15 @@
   transition: transform 180ms var(--ease);
 }
 
-.solar-link:hover,
 .solar-link:focus-visible {
   transform: scale(1.14);
+}
+
+/* Hover zoom only for a real mouse or trackpad, never a stuck touch hover */
+@media (hover: hover) and (pointer: fine) {
+  .solar-link:hover {
+    transform: scale(1.14);
+  }
 }
 
 .solar-link:focus-visible {

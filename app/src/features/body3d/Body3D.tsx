@@ -229,8 +229,8 @@ export default function Body3D(props: Body3DProps) {
               >
                 <motion.span
                   className={`block size-2 rounded-full ring-2 ring-[var(--card)] ${meta.rule}`}
-                  initial={{ scale: 0 }}
-                  animate={{ scale: placed && !hidden ? (hot ? 1.5 : 1) : 0 }}
+                  initial={{ scale: 0.6, opacity: 0 }}
+                  animate={{ scale: placed && !hidden ? (hot ? 1.5 : 1) : 0.6, opacity: placed && !hidden ? 1 : 0 }}
                   transition={{ type: 'spring', stiffness: 400, damping: 22, delay: placed ? i * 0.09 : 0 }}
                 />
               </span>

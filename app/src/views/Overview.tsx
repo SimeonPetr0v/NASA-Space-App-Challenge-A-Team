@@ -282,6 +282,7 @@ export function Overview() {
   const { theme, mode, delaySec } = useStore()
   return (
     <Page className="grid grid-cols-[minmax(0,1fr)] gap-8 pt-6 pb-16">
+      <h1 className="sr-only">Overview: crew health status</h1>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <MissionTrack mode={mode} delaySec={delaySec} />
         {FEATURES.scheduleReminders && <ScheduleChip />}
