@@ -315,11 +315,33 @@ async function addBodyParts3D(dir) {
       where the skin fingers point and never leave the skin.
     */
     const hb = boundsOf(handPos)
+    /*
+      The skin wrist: the narrowest cross-section of the skin arm between 12
+      and 30 cm above the skin fingertips. The bone wrist goes there and the
+      bone fingertips just inside the skin fingertips; the forearm then
+      stretches to meet the wrist, so the arm may get a little longer.
+    */
+    let low = Infinity
+    for (let i = 0; i < skin.length; i += 3) {
+      if (skin[i] * sign >= 0.27 && skin[i + 1] < hb.max[1] + 0.1 && skin[i + 1] > hb.min[1] - 0.08) low = Math.min(low, skin[i + 1])
+    }
+    let wristY = hb.max[1]
+    let narrowest = Infinity
+    for (let y = low + 0.12; y <= low + 0.3; y += 0.005) {
+      const f = sliceAt(y)
+      if (!f) continue
+      const area = (f.x1 - f.x0) * (f.z1 - f.z0)
+      if (area < narrowest) {
+        narrowest = area
+        wristY = y
+      }
+    }
     const skinHand = []
     for (let i = 0; i < skin.length; i += 3) {
-      if (skin[i] * sign < 0.27 || skin[i + 1] > hb.max[1] || skin[i + 1] < hb.min[1] - 0.05) continue
+      if (skin[i] * sign < 0.27 || skin[i + 1] > wristY || skin[i + 1] < hb.min[1] - 0.08) continue
       skinHand.push(skin[i], skin[i + 1], skin[i + 2])
     }
+    console.log(`skin wrist ${sign > 0 ? 'left' : 'right'}: ${wristY.toFixed(3)} m (bone wrist was ${hb.max[1].toFixed(3)}), skin hand length ${(wristY - low).toFixed(3)} m`)
     const frameOf = (pos) => {
       const b = boundsOf(pos)
       const top = endCentre(pos, true)
@@ -357,13 +379,14 @@ async function addBodyParts3D(dir) {
     }
     const bf = frameOf(handPos)
     const sf = frameOf(skinHand)
-    const TISSUE = [0.012, 0.008, 0.006]
+    const TISSUE = [0.005, 0.008, 0.006]
     const fit = [0, 1, 2].map((a) => {
       const [b0, b1] = bf.range[a]
       const [s0, s1] = sf.range[a]
       const lenS = a === 0 ? s1 - s0 - TISSUE[0] : s1 - s0 - 2 * TISSUE[a]
-      const k = Math.min(a === 0 ? 2 : 1.15, Math.max(0.3, lenS / Math.max(1e-6, b1 - b0)))
-      const mid = a === 0 ? 0 : (s0 + s1) / 2 - ((b0 + b1) / 2) * k
+      /* Length keeps the bone hand's proportions (0.9-1.15x) and lines the fingertips up with the skin fingertips; the wrist follows */
+      const k = a === 0 ? Math.min(1.15, Math.max(0.9, lenS / Math.max(1e-6, b1 - b0))) : Math.min(1.15, Math.max(0.3, lenS / Math.max(1e-6, b1 - b0)))
+      const mid = a === 0 ? lenS - b1 * k : (s0 + s1) / 2 - ((b0 + b1) / 2) * k
       return { k, mid }
     })
     const hand = new Float32Array(handPos.length)
