@@ -1,4 +1,4 @@
-import { BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Moon, RadioTower, Rocket } from 'lucide-react'
+import { BedDouble, BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Moon, RadioTower, Rocket, Sun } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { CrewSwitcher } from '@/components/CrewSwitcher'
 import { CREW } from '@/data/crew'
@@ -19,6 +19,10 @@ const NAV: { route: Route; label: string; icon: typeof LayoutDashboard }[] = [
   { route: 'brief', label: 'Mission brief', icon: Rocket },
 ]
 
+/* Sleep shift: the night quick actions take the Mission brief slot (no story page at 03:00) */
+const NIGHT_NAV = NAV.map((n) => (n.route === 'brief' ? { route: 'sleep' as Route, label: 'Sleep shift', icon: BedDouble } : n))
+const useNav = () => (useStore().theme === 'night' ? NIGHT_NAV : NAV)
+
 const TITLES: Record<Route, string> = {
   overview: 'Overview',
   log: 'Log reading',
@@ -26,6 +30,7 @@ const TITLES: Record<Route, string> = {
   link: 'Earth link',
   method: 'Methodology',
   brief: 'Mission brief',
+  sleep: 'Sleep shift',
 }
 
 /* Mission elapsed time: day 1 started at 00:00 UTC, MISSION_DAY_TODAY - 1 days before the demo morning check */
@@ -48,6 +53,7 @@ export function Wordmark({ className }: { className?: string }) {
 
 function SideNav({ route }: { route: Route }) {
   const { mode, delaySec, crewId } = useStore()
+  const nav = useNav()
   const m = MISSIONS[mode]
   return (
     <aside className="bg-chrome text-chrome-foreground sticky top-0 hidden h-svh w-60 shrink-0 flex-col lg:flex">
@@ -55,7 +61,7 @@ function SideNav({ route }: { route: Route }) {
         <Wordmark />
       </div>
       <nav aria-label="Main" className="flex flex-col gap-px p-3">
-        {NAV.map(({ route: r, label, icon: Icon }) => (
+        {nav.map(({ route: r, label, icon: Icon }) => (
           <a
             key={r}
             href={href(r)}
@@ -132,7 +138,8 @@ function MissionSwitcher() {
 }
 
 function TopBar({ route }: { route: Route }) {
-  const { setTheme, clock } = useStore()
+  const { theme, setTheme, clock } = useStore()
+  const night = theme === 'night'
   const now = useSimNow(1000)
   const met = Math.max(0, now - LAUNCH)
   const d = Math.floor(met / 86_400_000)
@@ -174,12 +181,13 @@ function TopBar({ route }: { route: Route }) {
         <MissionSwitcher />
         <button
           type="button"
-          onClick={() => setTheme('night')}
+          onClick={() => setTheme(night ? 'day' : 'night')}
           className="border-border-strong text-muted-foreground hover:text-foreground hover:bg-muted flex size-11 items-center justify-center rounded-sm border md:size-9"
-          aria-label="Switch to sleep-shift night mode"
-          title="Sleep-shift night mode"
+          aria-label={night ? 'Night mode on. Switch to day mode' : 'Switch to sleep-shift night mode'}
+          aria-pressed={night}
+          title={night ? 'Day mode' : 'Sleep-shift night mode'}
         >
-          <Moon className="size-4" strokeWidth={1.75} aria-hidden="true" />
+          {night ? <Sun className="size-4" strokeWidth={1.75} aria-hidden="true" /> : <Moon className="size-4" strokeWidth={1.75} aria-hidden="true" />}
         </button>
       </div>
     </header>
@@ -187,9 +195,10 @@ function TopBar({ route }: { route: Route }) {
 }
 
 function MobileNav({ route }: { route: Route }) {
+  const nav = useNav()
   return (
     <nav aria-label="Main" className="bg-card border-border fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t pb-[env(safe-area-inset-bottom)] lg:hidden">
-      {NAV.map(({ route: r, label, icon: Icon }) => (
+      {nav.map(({ route: r, label, icon: Icon }) => (
         <a
           key={r}
           href={href(r)}
@@ -201,7 +210,7 @@ function MobileNav({ route }: { route: Route }) {
         >
           {route === r && <span aria-hidden="true" className="bg-foreground absolute inset-x-4 top-0 h-0.5" />}
           <Icon className="size-[1.125rem]" strokeWidth={1.75} aria-hidden="true" />
-          <span className="max-w-full truncate px-1">{label.replace('Log reading', 'Log').replace('Methodology', 'Method').replace('Mission brief', 'Brief')}</span>
+          <span className="max-w-full truncate px-1">{label.replace('Log reading', 'Log').replace('Methodology', 'Method').replace('Mission brief', 'Brief').replace('Sleep shift', 'Sleep')}</span>
         </a>
       ))}
     </nav>

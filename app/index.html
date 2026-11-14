@@ -7,6 +7,15 @@
     <meta name="theme-color" content="#ffffff" />
     <meta name="description" content="Self-assessment health monitor for astronauts on long-duration missions." />
     <title>Astro Health Monitor</title>
+    <script>
+      /* Apply the saved theme before first paint so night mode never flashes bright day colours */
+      try {
+        if (JSON.parse(localStorage.getItem('ahm:settings-v1') || '{}').theme === 'night') {
+          document.documentElement.dataset.theme = 'night'
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#1a120d')
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,4 +1,5 @@
-import { Sun } from 'lucide-react'
+import { Moon } from 'lucide-react'
+import { PageBanner } from '@/components/PageBanner'
 import { useState } from 'react'
 import { StatusGlyph } from '@/components/StatusBadge'
 import { STATUS_META } from '@/components/status-meta'
@@ -10,12 +11,11 @@ import { delayText, utcTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useSimNow, useStore } from '@/state/store'
 import { useHealth } from '@/state/useHealth'
-import { Wordmark } from '@/shell/AppShell'
 
 /*
-  Sleep-shift night mode (docs/night-mode.md): only status, one action and three
-  quick night actions. Warm, low-blue tokens; no charts, no 3D, no ambient motion.
-  Danger still escalates at full priority.
+  Sleep shift page (docs/night-mode.md): status, one action and three quick night
+  actions for a crew member who wakes up. Night mode itself is a token swap for
+  the whole app (warm, low-blue, no looping motion). Danger still escalates.
 */
 
 type Panel = null | 'waking' | 'vitals' | 'unwell'
@@ -23,7 +23,7 @@ type Panel = null | 'waking' | 'vitals' | 'unwell'
 const REASONS = ['Noise', 'Temperature', 'Worry', 'Bathroom', 'Other']
 
 export function NightView() {
-  const { setTheme, logWaking, wakings, addReadings, sendReport, history, delaySec, simNow } = useStore()
+  const { theme, setTheme, logWaking, wakings, addReadings, sendReport, history, delaySec, simNow } = useStore()
   const { readings, assessments, summary } = useHealth()
   const now = useSimNow(10_000)
   const [panel, setPanel] = useState<Panel>(null)
@@ -41,17 +41,12 @@ export function NightView() {
   })()
 
   return (
-    <div className="flex min-h-svh flex-col">
-      <header className="border-border flex h-14 items-center gap-3 border-b px-4 sm:px-6">
-        <Wordmark />
-        <span className="label text-muted-foreground ml-2 hidden sm:inline">Sleep shift</span>
-        <span className="num text-muted-foreground ml-auto text-sm">{utcTime(now)} UTC</span>
-        <Action variant="secondary" onClick={() => setTheme('day')} aria-label="Night mode on. Switch back to day mode">
-          <Sun aria-hidden="true" /> <span className="hidden sm:inline">Day mode</span>
-        </Action>
-      </header>
+    <>
+      <PageBanner eyebrow={`Sleep shift · ${utcTime(now)} UTC`} title="Rest well">
+        Only what you need if you wake up. The full app stays in warm, low-blue colours until day mode.
+      </PageBanner>
 
-      <main id="main" className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-4 py-10 sm:py-16">
+      <div className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-8 px-4 py-10 sm:py-14">
         <section aria-labelledby="night-status" className={cn(summary.overall === 'danger' && 'danger-once')}>
           <p id="night-status" className="label text-muted-foreground">
             Overall status
@@ -199,8 +194,12 @@ export function NightView() {
             </div>
           </section>
         )}
-      </main>
-      <footer className="text-muted-foreground px-4 pb-6 text-center text-xs">Low-blue display for crew sleep periods. Charts and the 3D body are hidden until day mode.</footer>
-    </div>
+        {theme === 'day' && (
+          <Action variant="secondary" onClick={() => setTheme('night')}>
+            <Moon aria-hidden="true" /> Turn on night colours
+          </Action>
+        )}
+      </div>
+    </>
   )
 }

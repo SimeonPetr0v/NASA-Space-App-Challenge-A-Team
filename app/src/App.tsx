@@ -23,14 +23,7 @@ function Screens() {
 
   return (
     <>
-      <AnimatePresence mode="wait">
-        {theme === 'night' ? (
-          <motion.div key="night" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
-            <NightView />
-          </motion.div>
-        ) : (
-          <motion.div key="day" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
-            <AppShell route={route}>
+      <AppShell route={route}>
               <AnimatePresence mode="wait">
                 <motion.div
                   key={route}
@@ -45,12 +38,10 @@ function Screens() {
                   {route === 'link' && <EarthLink />}
                   {route === 'method' && <Methodology />}
                   {route === 'brief' && <Brief />}
+                  {route === 'sleep' && <NightView />}
                 </motion.div>
               </AnimatePresence>
-            </AppShell>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </AppShell>
       <TransmitOverlay />
     </>
   )

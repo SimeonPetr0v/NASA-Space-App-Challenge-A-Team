@@ -169,3 +169,16 @@
 @media (prefers-reduced-motion: reduce) {
   .view-in, .danger-once { animation: none; }
 }
+
+/*
+  Night mode (docs/night-mode.md): the whole app keeps working in warm,
+  low-luminance tokens. Looping ambient motion stops; one-time entrances and
+  live data (signal packets) stay. Illustrations with fixed natural colours
+  (Earth, spacecraft) are warmed and dimmed so no blue light remains.
+*/
+:root[data-theme='night'] :is(.twinkle, .ecg, .signal-flow, .marquee, .orbit-travel, .earth-pulse, .nebula, .planet-spin, .ship-bob, .thruster, .photon-pulse) {
+  animation: none;
+}
+:root[data-theme='night'] .night-warm {
+  filter: sepia(0.9) saturate(0.75) hue-rotate(-12deg) brightness(0.72);
+}
