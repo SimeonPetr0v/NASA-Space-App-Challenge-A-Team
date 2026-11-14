@@ -3,11 +3,11 @@ import { Canvas } from '@react-three/fiber'
 import { Suspense, useEffect, useRef, useState } from 'react'
 import type { BodyRegion, Status } from '@/engine/types'
 import { BodyModel } from './BodyModel'
+import { STATUS_META } from '@/components/StatusBadge'
 import { STATUS_HEX } from './palette'
 import { HOME_VIEW, REGIONS } from './regions'
 import { useBodyModel } from './useBodyModel'
 
-const GLYPH: Record<Status, string> = { normal: '●', caution: '▲', danger: '◆', 'no-data': '○', stale: '○' }
 const WORD: Record<Status, string> = { normal: 'nominal', caution: 'caution', danger: 'act now', 'no-data': 'not measured', stale: 'needs re-measuring' }
 
 export type Body3DProps = {
@@ -75,7 +75,10 @@ function Scene({ theme, statusByRegion, selected, onSelect }: Body3DProps) {
               style={{ color: STATUS_HEX[theme][status], opacity: hidden ? 0 : 1 }}
               tabIndex={hidden ? -1 : 0}
             >
-              <span aria-hidden="true">{GLYPH[status]}</span>
+              {(() => {
+                const { Icon } = STATUS_META[status]
+                return <Icon size={16} strokeWidth={2.25} aria-hidden="true" />
+              })()}
             </button>
           </Html>
         )

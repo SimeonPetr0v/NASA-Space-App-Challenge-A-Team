@@ -1,15 +1,17 @@
 /*
-  Design tokens shared by the whole app.
-  Values here are PLACEHOLDERS until the design kickoff freezes the palette
-  (see .claude/skills/astro-ui-design). Components must use these tokens
-  (directly or via Tailwind classes like bg-status-ok), never raw hex values.
+  Design tokens shared by the whole app (docs/design-direction.md §5).
+  Components use these tokens (directly or via Tailwind classes such as
+  text-status-caution), never raw hex values.
 */
 
 :root {
-  --status-ok: oklch(0.62 0.14 155);
-  --status-caution: oklch(0.78 0.15 80);
-  --status-danger: oklch(0.58 0.21 27);
-  --status-none: oklch(0.6 0 0);
+  --status-ok: #1E7F4F;
+  --status-caution: #B57800;
+  --status-danger: #C2342B;
+  --status-none: #7A8894;
+  --status-ok-bg: #E3F2EA;
+  --status-caution-bg: #FBF0D9;
+  --status-danger-bg: #FBE4E2;
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
@@ -22,29 +24,33 @@
   Activated with <html data-theme="night">.
 */
 :root[data-theme='night'] {
-  --background: oklch(0.16 0.02 40);
-  --foreground: oklch(0.82 0.1 65);
-  --card: oklch(0.2 0.025 40);
-  --card-foreground: oklch(0.82 0.1 65);
-  --popover: oklch(0.2 0.025 40);
-  --popover-foreground: oklch(0.82 0.1 65);
-  --primary: oklch(0.72 0.13 55);
-  --primary-foreground: oklch(0.16 0.02 40);
-  --secondary: oklch(0.25 0.03 40);
-  --secondary-foreground: oklch(0.82 0.1 65);
-  --muted: oklch(0.25 0.03 40);
-  --muted-foreground: oklch(0.68 0.08 60);
-  --accent: oklch(0.25 0.03 40);
-  --accent-foreground: oklch(0.82 0.1 65);
-  --destructive: oklch(0.6 0.19 30);
-  --border: oklch(0.82 0.1 65 / 15%);
-  --input: oklch(0.82 0.1 65 / 20%);
-  --ring: oklch(0.72 0.13 55);
+  --background: #140C08;
+  --foreground: #F0C9A0;
+  --card: #1D130D;
+  --card-foreground: #F0C9A0;
+  --popover: #1D130D;
+  --popover-foreground: #F0C9A0;
+  --surface-2: #24180F;
+  --primary: #E39A4C;
+  --primary-foreground: #140C08;
+  --secondary: #24180F;
+  --secondary-foreground: #F0C9A0;
+  --muted: #24180F;
+  --muted-foreground: #BF9A78;
+  --accent: #33220F;
+  --accent-foreground: #F0B878;
+  --destructive: #E2583A;
+  --border: #3A2A1F;
+  --input: #4A3627;
+  --ring: #E39A4C;
 
-  --status-ok: oklch(0.72 0.1 95);
-  --status-caution: oklch(0.78 0.14 70);
-  --status-danger: oklch(0.62 0.2 30);
-  --status-none: oklch(0.6 0.04 60);
+  --status-ok: #BFAE5A;
+  --status-caution: #E6A03C;
+  --status-danger: #E2583A;
+  --status-none: #8B7A66;
+  --status-ok-bg: #2A2410;
+  --status-caution-bg: #33230C;
+  --status-danger-bg: #3A1810;
 }
 
 @media (prefers-reduced-motion: reduce) {
