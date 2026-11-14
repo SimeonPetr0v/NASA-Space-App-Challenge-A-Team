@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowRight } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { motion } from 'motion/react'
 import { CountUp } from '@/components/motion'
 import { EASE_OUT } from '@/components/motion-config'
@@ -152,8 +152,8 @@ export function SpaceHero() {
           >
             Log today’s check <ArrowRight className="size-4" aria-hidden="true" />
           </a>
-          <a href="#status" className="text-space-foreground inline-flex min-h-11 items-center gap-2 px-2 text-sm font-medium underline-offset-4 hover:underline">
-            What needs attention <ArrowDown className="size-4" aria-hidden="true" />
+          <a href={href('overview')} className="text-space-foreground inline-flex min-h-11 items-center gap-2 px-2 text-sm font-medium underline-offset-4 hover:underline">
+            Open my status <ArrowRight className="size-4" aria-hidden="true" />
           </a>
         </motion.div>
 

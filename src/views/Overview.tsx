@@ -1,9 +1,9 @@
 import { ArrowRight, Send } from 'lucide-react'
 import { motion } from 'motion/react'
-import { Reveal } from '@/components/motion'
+import { Fragment } from 'react'
 import { staggerChild, staggerParent } from '@/components/motion-config'
-import { ClosingBand, HazardGrid, VitalsMarquee } from '@/components/ShowcaseSections'
-import { SpaceHero } from '@/components/SpaceHero'
+import { MissionTrack } from '@/components/MissionTrack'
+import { RangeGauge } from '@/components/RangeGauge'
 import { Page } from '@/shell/Page'
 import { Panel, PanelHeader } from '@/components/Panel'
 import { StatusBadge, StatusGlyph } from '@/components/StatusBadge'
@@ -13,7 +13,7 @@ import { Action, ActionLink } from '@/components/ui/action'
 import { missionDayOf } from '@/data/demo-readings'
 import { INDICATORS } from '@/data/indicators'
 import { MISSIONS } from '@/data/missions'
-import { ESCALATION_TEXT, formatValue, seriesOf } from '@/engine/assess'
+import { baselineOf, ESCALATION_TEXT, formatValue, primaryValue, SEVERITY, seriesOf } from '@/engine/assess'
 import type { Escalation } from '@/engine/types'
 import { BodyExplorer } from '@/features/body3d/BodyExplorer'
 import { delayText, relativeAge, utcTime } from '@/lib/format'
@@ -166,6 +166,13 @@ function ReadingsTable() {
   const { readings, assessments, who5 } = useHealth()
   const now = useSimNow(60_000)
   const latestAt = readings.reduce((a, r) => (Date.parse(r.takenAt) > a ? Date.parse(r.takenAt) : a), 0)
+  const paired = readings.map((r, i) => ({ r, a: assessments.find((x) => x.indicatorId === r.indicatorId) ?? assessments[i] }))
+  const isOff = (p: (typeof paired)[number]) => p.a.status === 'caution' || p.a.status === 'danger'
+  const ordered = [
+    ...paired.filter(isOff).sort((x, y) => SEVERITY[y.a.status] - SEVERITY[x.a.status]),
+    ...paired.filter((p) => !isOff(p)),
+  ]
+  const attentionCount = paired.filter(isOff).length
   return (
     <Panel aria-labelledby="readings-title">
       <PanelHeader
@@ -194,11 +201,12 @@ function ReadingsTable() {
           <span role="columnheader" className="label">Status</span>
           <span role="columnheader" className="label">Last 7 days</span>
           <span role="columnheader" className="label text-right">vs baseline</span>
-          <span role="columnheader" className="label">Normal range</span>
+          <span role="columnheader" className="label">Where you are</span>
           <span role="columnheader" className="label text-right">Measured</span>
         </div>
-        {readings.map((r, i) => {
-          const a = assessments.find((x) => x.indicatorId === r.indicatorId) ?? assessments[i]
+        {ordered.map(({ r, a }, i) => {
+          const firstFine = i === attentionCount
+          const firstOff = i === 0 && attentionCount > 0
           const def = INDICATORS[r.indicatorId]
           const isWho5 = r.indicatorId === 'mood' && who5 !== undefined
           const shown = isWho5 ? String(who5.percent) : formatValue(r.indicatorId, r.value)
@@ -207,10 +215,17 @@ function ReadingsTable() {
           const off = a.status === 'caution' || a.status === 'danger'
           const delta = a.baselineDelta
           return (
+            <Fragment key={r.indicatorId}>
+            {(firstOff || firstFine) && (
+              <div role="row" className="border-border bg-muted/40 border-b px-5 py-2">
+                <span role="cell" className="label text-muted-foreground">
+                  {firstOff ? `Needs attention · ${attentionCount}` : `Within your limits · ${ordered.length - attentionCount}`}
+                </span>
+              </div>
+            )}
             <motion.a
               variants={staggerChild}
               role="row"
-              key={r.indicatorId}
               href={href('trends', r.indicatorId)}
               aria-label={`${isWho5 ? 'Well-being (WHO-5)' : def.label}: ${shown} ${unit}, ${meta.word}. Open trend.`}
               className="group border-border hover:bg-muted/60 relative grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1.5 border-b px-5 py-3 last:border-b-0 md:grid-cols-[minmax(11rem,1.4fr)_8rem_7.5rem_7.5rem_5.5rem_8rem_6rem] md:py-2.5"
@@ -235,13 +250,18 @@ function ReadingsTable() {
               <span role="cell" className={cn('num hidden text-right text-xs md:block', delta !== undefined && Math.abs(delta) >= 10 ? 'text-foreground font-semibold' : 'text-muted-foreground')}>
                 {delta === undefined ? '-' : `${delta > 0 ? '+' : delta < 0 ? '−' : ''}${Math.abs(delta).toFixed(0)} %`}
               </span>
-              <span role="cell" className="num text-muted-foreground hidden text-xs md:block">
-                {isWho5 ? '≥ 13 raw (52/100)' : `${def.ranges.normal} ${def.unit}`}
+              <span role="cell" className="hidden md:block" title={isWho5 ? 'Follow-up below 13 raw (52/100)' : `Normal ${def.ranges.normal} ${def.unit}`}>
+                {isWho5 ? (
+                  <span className="num text-muted-foreground text-xs">≥ 52/100</span>
+                ) : (
+                  <RangeGauge def={def} value={primaryValue(r.value)} baseline={baselineOf(history, r.indicatorId)} />
+                )}
               </span>
               <span role="cell" className="text-muted-foreground text-right text-xs">
                 {relativeAge(isWho5 ? who5.takenAt : r.takenAt, now)}
               </span>
             </motion.a>
+            </Fragment>
           )
         })}
       </motion.div>
@@ -249,31 +269,24 @@ function ReadingsTable() {
   )
 }
 
+/*
+  The daily tool: opens straight onto mission context, status and the next
+  action. The story / landing content lives on the Mission brief page.
+*/
 export function Overview() {
   const { readings, assessments } = useHealth()
-  const { theme } = useStore()
+  const { theme, mode, delaySec } = useStore()
   return (
-    <>
-      <SpaceHero />
-      <Page className="grid grid-cols-[minmax(0,1fr)] gap-10 pt-10 pb-16">
-        <Reveal id="status" className="scroll-mt-20">
-          <StatusSummary />
-        </Reveal>
-        <Reveal>
-          <ReadingsTable />
-        </Reveal>
-      </Page>
-      <VitalsMarquee />
-      <Page className="grid grid-cols-[minmax(0,1fr)] gap-16 pt-16 pb-20">
-        <Reveal>
-          <Panel aria-labelledby="body-title">
-            <PanelHeader id="body-title" title="Body systems" meta="Select a system to see what spaceflight does to it" />
-            <BodyExplorer readings={readings} assessments={assessments} theme={theme} />
-          </Panel>
-        </Reveal>
-        <HazardGrid />
-      </Page>
-      <ClosingBand />
-    </>
+    <Page className="grid grid-cols-[minmax(0,1fr)] gap-8 pt-6 pb-16">
+      <MissionTrack mode={mode} delaySec={delaySec} />
+      <section id="status" className="scroll-mt-20">
+        <StatusSummary />
+      </section>
+      <Panel aria-labelledby="body-title">
+        <PanelHeader id="body-title" title="Body systems" meta="Select a system to see what spaceflight does to it" />
+        <BodyExplorer readings={readings} assessments={assessments} theme={theme} />
+      </Panel>
+      <ReadingsTable />
+    </Page>
   )
 }
