@@ -3,6 +3,9 @@ import { motion } from 'motion/react'
 import { Fragment } from 'react'
 import { staggerChild, staggerParent } from '@/components/motion-config'
 import { MissionTrack } from '@/components/MissionTrack'
+import { FEATURES } from '@/config/features'
+import { RadiationBudget } from '@/features/radiation/RadiationBudget'
+import { TrendWatch } from '@/features/trends/TrendWatch'
 import { RangeGauge } from '@/components/RangeGauge'
 import { Page } from '@/shell/Page'
 import { Panel, PanelHeader } from '@/components/Panel'
@@ -295,6 +298,12 @@ export function Overview() {
       <section id="status" className="scroll-mt-20">
         <StatusSummary />
       </section>
+      {(FEATURES.trendWarnings || FEATURES.radiation) && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {FEATURES.trendWarnings && <TrendWatch />}
+          {FEATURES.radiation && <RadiationBudget />}
+        </div>
+      )}
       <Panel aria-labelledby="body-title">
         <PanelHeader id="body-title" title="Body systems" meta="Select a system to see what spaceflight does to it" />
         <BodyExplorer readings={readings} assessments={assessments} theme={theme} />

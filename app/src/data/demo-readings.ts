@@ -6,7 +6,8 @@ import { MISSION_DAY_TODAY } from './missions'
   SYNTHETIC demo data - not real astronaut data. Label it as demo data in the UI.
   Scenario: mission day 47. Thirty days of history per crew member ending with
   today's morning check:
-  - CM-1 (commander, CMO): all nominal.
+  - CM-1 (commander, CMO): all nominal, but sleep has fallen 4 nights in a row
+    while every night is still above 7 h (shows the trend warning).
   - CM-2 (flight engineer): rising temperature and heart rate - caution.
   - CM-3 (mission specialist): falling oxygen saturation and very short sleep - act now.
 */
@@ -25,7 +26,8 @@ export const DEMO_TODAY = morningCheck()
 type Today = Record<Exclude<IndicatorId, 'bp'>, number> & { bp: [number, number] }
 type Profile = { base: number; noise: number; drift: number; decimals: number; min?: number; max?: number }
 type Profiles = Record<Exclude<IndicatorId, 'bp'>, Profile>
-type Scenario = { seed: number; today: Today; profiles: Profiles; bp: { sys: number; dia: number; drift: number } }
+/* tail: exact values for the last days before today, oldest first (to script a story such as a slow sleep drop) */
+type Scenario = { seed: number; today: Today; profiles: Profiles; bp: { sys: number; dia: number; drift: number }; tail?: Partial<Record<Exclude<IndicatorId, 'bp'>, number[]>> }
 
 const BASE: Profiles = {
   hr: { base: 66, noise: 4, drift: 18, decimals: 0 },
@@ -43,7 +45,8 @@ const with_ = (over: Partial<Record<keyof Profiles, Partial<Profile>>>): Profile
 const SCENARIOS: Record<CrewId, Scenario> = {
   cm1: {
     seed: 11,
-    today: { hr: 63, bp: [114, 74], spo2: 98, temp: 36.7, glu: 86, sleep: 7.4, mood: 5, exercise: 134 },
+    today: { hr: 63, bp: [114, 74], spo2: 98, temp: 36.7, glu: 86, sleep: 7.1, mood: 5, exercise: 134 },
+    tail: { sleep: [7.9, 7.7, 7.5, 7.3] },
     profiles: with_({
       hr: { base: 62, drift: 1 },
       temp: { base: 36.7, drift: 0 },
@@ -112,7 +115,9 @@ function buildHistory(s: Scenario): Reading[] {
     const takenAt = new Date(today - back * DAY_MS + Math.round((rand() - 0.5) * 40) * 60_000).toISOString()
     for (const [id, p] of Object.entries(s.profiles) as [Exclude<IndicatorId, 'bp'>, Profile][]) {
       if (id === 'glu' && back % 7 !== 0) continue // glucose is weekly
-      const v = clamp(round(p.base + p.drift * t + (rand() - 0.5) * 2 * p.noise, p.decimals), p.min, p.max)
+      const tail = s.tail?.[id]
+      const scripted = tail && back <= tail.length ? tail[tail.length - back] : undefined
+      const v = scripted ?? clamp(round(p.base + p.drift * t + (rand() - 0.5) * 2 * p.noise, p.decimals), p.min, p.max)
       out.push({ indicatorId: id, value: v as ReadingValue, takenAt, source: 'device' })
     }
     const sys = Math.round(s.bp.sys + s.bp.drift * t + (rand() - 0.5) * 10)
