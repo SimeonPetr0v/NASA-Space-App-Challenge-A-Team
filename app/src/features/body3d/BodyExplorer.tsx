@@ -4,6 +4,8 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { INDICATORS } from '@/data/indicators'
 import type { Assessment, BodyRegion, BloodPressure, Reading, ReadingValue, Status } from '@/engine/types'
 import { cn } from '@/lib/utils'
+import { FEATURES } from '@/config/features'
+import { BodyTimelinePanel, BodyTimelineToggle } from '@/features/body-timeline/BodyTimeline'
 import { REGIONS } from './regions'
 
 const Body3D = lazy(() => import('./Body3D'))
@@ -31,6 +33,7 @@ type Props = {
 export function BodyExplorer({ readings, assessments, theme }: Props) {
   const [selected, setSelected] = useState<BodyRegion | null>(null)
   const [webgl] = useState(hasWebGL)
+  const [timelineDay, setTimelineDay] = useState<number | null>(null)
 
   const statusByRegion = useMemo(() => {
     const result = Object.fromEntries(REGIONS.map((r) => [r.id, 'no-data'])) as Record<BodyRegion, Status>
@@ -56,12 +59,20 @@ export function BodyExplorer({ readings, assessments, theme }: Props) {
         <div className="absolute inset-0">
           {webgl ? (
             <Suspense fallback={<p className="text-muted-foreground p-4 text-sm">Loading 3D body…</p>}>
-              <Body3D theme={theme} statusByRegion={statusByRegion} selected={selected} onSelect={setSelected} />
+              <Body3D theme={theme} statusByRegion={statusByRegion} selected={selected} onSelect={setSelected} timelineDay={timelineDay} />
             </Suspense>
           ) : (
             <p className="text-muted-foreground p-4 text-sm">3D view is not available on this device. Use the body systems list.</p>
           )}
         </div>
+        {FEATURES.bodyTimeline && webgl && (
+          <>
+            <div className="absolute top-3 right-3 z-20">
+              <BodyTimelineToggle day={timelineDay} onChange={setTimelineDay} />
+            </div>
+            <BodyTimelinePanel day={timelineDay} onChange={setTimelineDay} />
+          </>
+        )}
         {selected && (
           <button
             type="button"

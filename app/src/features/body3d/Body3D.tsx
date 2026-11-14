@@ -18,6 +18,8 @@ export type Body3DProps = {
   statusByRegion: Record<BodyRegion, Status>
   selected: BodyRegion | null
   onSelect: (region: BodyRegion | null) => void
+  /** Mission day for the body-over-time view, or null when it is off */
+  timelineDay?: number | null
 }
 
 const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -101,7 +103,7 @@ function MarkerProjector({ geometry, markers, onPlaced }: { geometry: ReturnType
   return null
 }
 
-function Scene({ theme, statusByRegion, selected, onSelect, hovered, setHovered, setHoveredPart, markers, onPlaced }: SceneProps) {
+function Scene({ theme, statusByRegion, selected, onSelect, timelineDay, hovered, setHovered, setHoveredPart, markers, onPlaced }: SceneProps) {
   const model = useBodyModel()
   const [controls, setControls] = useState<CameraControls | null>(null)
   const placed = useRef(false)
@@ -129,6 +131,7 @@ function Scene({ theme, statusByRegion, selected, onSelect, hovered, setHovered,
         onSelect={(r) => onSelect(r === selected ? null : r)}
         onHover={setHovered}
         onHoverPart={setHoveredPart}
+        timelineDay={timelineDay ?? null}
       />
       <MarkerProjector geometry={model.geometry} markers={markers} onPlaced={onPlaced} />
       <CameraControls ref={setControls} minDistance={0.25} maxDistance={5} smoothTime={0.35} />

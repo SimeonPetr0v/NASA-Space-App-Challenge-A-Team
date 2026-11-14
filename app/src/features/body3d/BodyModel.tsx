@@ -2,7 +2,10 @@ import type { ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import type { BodyRegion, Status } from '@/engine/types'
+import { effectsAt } from '@/features/body-timeline/BodyTimeline'
 import { FALLBACK_TISSUE, STATUS_HEX, TISSUE } from './palette'
+
+const LOSS_TINT = new THREE.Color('#9aa0a6')
 import type { BodyModelData } from './useBodyModel'
 
 /*
@@ -22,6 +25,7 @@ type Props = {
   onSelect: (region: BodyRegion) => void
   onHover: (region: BodyRegion | null) => void
   onHoverPart?: (tissue: string | null) => void
+  timelineDay?: number | null
 }
 
 const SKIN = 'whole-body:base'
@@ -40,7 +44,7 @@ const pickRegion = (e: ThreeEvent<MouseEvent | PointerEvent>) => {
 
 const allMeshes = (model: BodyModelData) => Object.values(model.meshesByRegion).flat()
 
-export function BodyModel({ model, theme, statusByRegion, selected, hovered, onSelect, onHover, onHoverPart }: Props) {
+export function BodyModel({ model, theme, statusByRegion, selected, hovered, onSelect, onHover, onHoverPart, timelineDay = null }: Props) {
   const materials = useMemo(() => {
     const map = new Map<string, THREE.MeshPhysicalMaterial>()
     for (const mesh of allMeshes(model)) {
@@ -86,9 +90,21 @@ export function BodyModel({ model, theme, statusByRegion, selected, hovered, onS
       material.depthWrite = !isSkin && !dimmed
       material.emissive.set(isActive ? STATUS_HEX[theme][statusByRegion[region]] : '#000000')
       material.emissiveIntensity = selected === region ? 0.1 : isActive ? 0.25 : 0
+      if (timelineDay !== null && !dimmed) {
+        const fx = effectsAt(timelineDay)
+        if (region === 'musculoskeletal') {
+          material.opacity = 1 - 0.55 * fx.bone
+          material.color.lerp(LOSS_TINT, 0.35 * fx.bone)
+          material.depthWrite = fx.bone < 0.3
+        }
+        if (region === 'eyes' && !isActive) {
+          material.emissive.set(STATUS_HEX[theme].caution)
+          material.emissiveIntensity = 0.45 * fx.eyes
+        }
+      }
       material.needsUpdate = true
     }
-  }, [model, materials, theme, statusByRegion, selected, hovered])
+  }, [model, materials, theme, statusByRegion, selected, hovered, timelineDay])
 
   useEffect(() => () => materials.forEach((m) => m.dispose()), [materials])
 

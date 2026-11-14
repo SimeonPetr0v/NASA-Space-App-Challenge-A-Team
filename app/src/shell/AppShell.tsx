@@ -1,6 +1,7 @@
-import { BedDouble, BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Moon, RadioTower, Rocket, Sun } from 'lucide-react'
+import { Users, BedDouble, BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Moon, RadioTower, Rocket, Sun } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { CrewSwitcher } from '@/components/CrewSwitcher'
+import { FEATURES } from '@/config/features'
 import { CREW } from '@/data/crew'
 import { DEMO_TODAY } from '@/data/demo-readings'
 import { MISSION_DAY_TODAY, MISSION_ORDER, MISSIONS } from '@/data/missions'
@@ -31,6 +32,7 @@ const TITLES: Record<Route, string> = {
   method: 'Methodology',
   brief: 'Mission brief',
   sleep: 'Sleep shift',
+  crew: 'Crew board',
 }
 
 /* Mission elapsed time: day 1 started at 00:00 UTC, MISSION_DAY_TODAY - 1 days before the demo morning check */
@@ -53,7 +55,9 @@ export function Wordmark({ className }: { className?: string }) {
 
 function SideNav({ route }: { route: Route }) {
   const { mode, delaySec, crewId } = useStore()
-  const nav = useNav()
+  const base = useNav()
+  /* Crew board sits after Overview on desktop; on phones it is reached from the crew switcher */
+  const nav = FEATURES.crewBoard ? [base[0], { route: 'crew' as Route, label: 'Crew board', icon: Users }, ...base.slice(1)] : base
   const m = MISSIONS[mode]
   return (
     <aside className="bg-chrome text-chrome-foreground sticky top-0 hidden h-svh w-60 shrink-0 flex-col lg:flex">

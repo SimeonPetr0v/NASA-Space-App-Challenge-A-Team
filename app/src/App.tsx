@@ -9,6 +9,8 @@ import { LogReading } from '@/views/LogReading'
 import { Brief } from '@/views/Brief'
 import { Methodology } from '@/views/Methodology'
 import { NightView } from '@/views/NightView'
+import { FEATURES } from '@/config/features'
+import { CrewBoard } from '@/features/crew-board/CrewBoard'
 import { Overview } from '@/views/Overview'
 import { Trends } from '@/views/Trends'
 
@@ -39,6 +41,7 @@ function Screens() {
                   {route === 'method' && <Methodology />}
                   {route === 'brief' && <Brief />}
                   {route === 'sleep' && <NightView />}
+                  {route === 'crew' && (FEATURES.crewBoard ? <CrewBoard /> : <Overview />)}
                 </motion.div>
               </AnimatePresence>
       </AppShell>
