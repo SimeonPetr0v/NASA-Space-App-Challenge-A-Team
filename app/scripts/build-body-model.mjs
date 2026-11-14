@@ -392,7 +392,6 @@ async function addBodyParts3D(dir) {
       const skinPts = toPlane(skinHand)
       const bonePts = toPlane(hand)
       const lenOf = (pts) => pts.reduce((m, p) => Math.max(m, p[0]), 0)
-      const Ls = lenOf(skinPts)
       const Lb = lenOf(bonePts)
       /*
         Along the hand's length (a), in 16 bands, the centre and half-width of
