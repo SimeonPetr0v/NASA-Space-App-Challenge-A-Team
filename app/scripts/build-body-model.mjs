@@ -206,11 +206,117 @@ async function addBodyParts3D(dir) {
       const v = [0, 0, 0]
       for (let i = 0; i < a.getCount(); i++) {
         a.getElement(i, v)
-        skin.push(m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12], m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13])
+        skin.push(
+          m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12],
+          m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13],
+          m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14],
+        )
       }
     }
   }
   const SOFT_TISSUE = 0.012
+  /*
+    Then the arm and hand bones are fitted slice by slice (1 cm along the
+    height): at each height the bones are centred in the skin arm and shrunk
+    where they are wider than the skin minus a little soft tissue. The
+    BodyParts3D hand is posed with spread fingers in front of the palm, so
+    this pulls it into the skin hand. Near the shoulder the fit fades out so
+    the joint stays where the lungs mapping put it.
+  */
+  const LIMB_INSET = 0.008
+  const fitLimb = (armPos, handPos, sign) => {
+    const all = new Float32Array(armPos.length + handPos.length)
+    all.set(armPos)
+    all.set(handPos, armPos.length)
+    const ab = boundsOf(all)
+    const y0 = Math.floor(ab.min[1] * 100)
+    const n = Math.floor(ab.max[1] * 100) - y0 + 1
+    const box = () => Array.from({ length: n }, () => ({ x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity }))
+    const bone = box()
+    const flesh = box()
+    const add = (arr, x, y, z) => {
+      const k = Math.floor(y * 100) - y0
+      if (k < 0 || k >= n) return
+      const b = arr[k]
+      b.x0 = Math.min(b.x0, x)
+      b.x1 = Math.max(b.x1, x)
+      b.z0 = Math.min(b.z0, z)
+      b.z1 = Math.max(b.z1, z)
+    }
+    for (let i = 0; i < all.length; i += 3) add(bone, all[i], all[i + 1], all[i + 2])
+    /* Skin arm per slice: the outermost connected run of skin, cut off at the gap to the torso */
+    const bySlice = Array.from({ length: n }, () => [])
+    for (let i = 0; i < skin.length; i += 3) {
+      const k = Math.floor(skin[i + 1] * 100) - y0
+      if (skin[i] * sign <= 0.1) continue
+      for (let j = Math.max(0, k - 2); j <= Math.min(n - 1, k + 2); j++) bySlice[j].push(skin[i], skin[i + 2])
+    }
+    bySlice.forEach((pts, k) => {
+      const order = []
+      for (let i = 0; i < pts.length; i += 2) order.push(i)
+      order.sort((a, b) => pts[b] * sign - pts[a] * sign)
+      let last = Infinity
+      for (const i of order) {
+        const d = pts[i] * sign
+        if (last - d > 0.04) {
+          if (last !== Infinity) break
+        }
+        last = d
+        add(flesh, pts[i], (k + y0 + 0.5) / 100, pts[i + 1])
+      }
+      const f = flesh[k]
+      if (f.x1 - f.x0 > 0.22) flesh[k] = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity }
+    })
+    const raw = bone.map((b, k) => {
+      const f = flesh[k]
+      if (!Number.isFinite(b.x0) || !Number.isFinite(f.x0)) return null
+      const half = (lo, hi) => Math.max(0.001, (hi - lo) / 2)
+      return {
+        bx: (b.x0 + b.x1) / 2,
+        bz: (b.z0 + b.z1) / 2,
+        sx: (f.x0 + f.x1) / 2,
+        sz: (f.z0 + f.z1) / 2,
+        kx: Math.min(1, Math.max(0.2, (half(f.x0, f.x1) - LIMB_INSET) / half(b.x0, b.x1))),
+        kz: Math.min(1, Math.max(0.2, (half(f.z0, f.z1) - LIMB_INSET) / half(b.z0, b.z1))),
+      }
+    })
+    const W = 1
+    const smooth = raw.map((_, k) => {
+      const acc = { bx: 0, bz: 0, sx: 0, sz: 0, kx: 0, kz: 0 }
+      let c = 0
+      for (let j = Math.max(0, k - W); j <= Math.min(n - 1, k + W); j++) {
+        const r = raw[j]
+        if (!r) continue
+        for (const key in acc) acc[key] += r[key]
+        c++
+      }
+      if (!c) return null
+      for (const key in acc) acc[key] /= c
+      return acc
+    })
+    const fadeTop = ab.max[1] - 0.06
+    const fadeBottom = ab.max[1] - 0.2
+    const apply = (pos) => {
+      const out = new Float32Array(pos.length)
+      for (let i = 0; i < pos.length; i += 3) {
+        const [x, y, z] = [pos[i], pos[i + 1], pos[i + 2]]
+        const r = smooth[Math.min(n - 1, Math.max(0, Math.floor(y * 100) - y0))]
+        const t = Math.min(1, Math.max(0, (fadeTop - y) / (fadeTop - fadeBottom)))
+        const w = t * t * (3 - 2 * t)
+        if (!r || w === 0) {
+          out.set([x, y, z], i)
+          continue
+        }
+        const fx = r.sx + (x - r.bx) * r.kx
+        const fz = r.sz + (z - r.bz) * r.kz
+        out[i] = x + (fx - x) * w
+        out[i + 1] = y
+        out[i + 2] = z + (fz - z) * w
+      }
+      return out
+    }
+    return { arm: apply(armPos), hand: apply(handPos) }
+  }
   const hands = handBoneConcepts(dir)
   for (const side of ["right", "left"]) {
     const r = side === "right"
@@ -223,7 +329,7 @@ async function addBodyParts3D(dir) {
     const sign = Math.sign(from.min[0] + from.max[0])
     let outer = 0
     let lowest = Infinity
-    for (let i = 0; i < skin.length; i += 2) {
+    for (let i = 0; i < skin.length; i += 3) {
       if (skin[i] * sign < 0.3) continue
       outer = Math.max(outer, skin[i] * sign)
       lowest = Math.min(lowest, skin[i + 1])
@@ -234,8 +340,9 @@ async function addBodyParts3D(dir) {
     to.min[1] = lowest + SOFT_TISSUE
     console.log(`arm fit ${side}: outer x ${(from.max[0] * sign > 0 ? from.max[0] : -from.min[0]).toFixed(3)} → ${(outer - SOFT_TISSUE).toFixed(3)}, bottom ${from.min[1].toFixed(3)} → ${to.min[1].toFixed(3)}`)
     addPart(`shoulder_${side}`, fromLungs(girdle), girdle.indices, "musculoskeletal", 4000)
-    addPart(`arm_${side}`, new Float32Array(mapBounds(armPos, from, to)), arm.indices, "musculoskeletal", 6000)
-    addPart(`hand_${side}`, new Float32Array(mapBounds(handPos, from, to)), hand.indices, "musculoskeletal", 6000)
+    const fit = fitLimb(mapBounds(armPos, from, to), mapBounds(handPos, from, to), sign)
+    addPart(`arm_${side}`, fit.arm, arm.indices, "musculoskeletal", 6000)
+    addPart(`hand_${side}`, fit.hand, hand.indices, "musculoskeletal", 6000)
   }
 
   doc.createMaterial("whole-body:stomach").setBaseColorFactor([0.85, 0.55, 0.5, 1]).setRoughnessFactor(0.5).setMetallicFactor(0)
