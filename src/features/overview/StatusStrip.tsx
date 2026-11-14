@@ -47,7 +47,7 @@ export function StatusStrip({ overall, attentionCount, top, mission, night, onTo
             onClick={() => onOpen(top)}
             className={cn('min-h-9 rounded-md px-3 py-1.5 text-left text-sm transition-colors duration-150 hover:brightness-95', bg, STATUS_META[top.assessment.status].text)}
           >
-            <span className="font-semibold">Do now:</span> {top.guidance.doNow[0].toLowerCase()} · re-check in {top.guidance.recheckIn}
+            <span className="font-semibold">Prototype flag:</span> {top.guidance.doNow[0].toLowerCase()} · re-check as directed
           </button>
         )}
 

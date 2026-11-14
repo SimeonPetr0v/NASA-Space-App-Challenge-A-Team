@@ -1,4 +1,4 @@
-import { GAUGES, GUIDANCE, type Gauge, type Guidance } from '@/data/indicator-display'
+import { GAUGES, guidanceFor, type Gauge, type Guidance } from '@/data/indicator-display'
 import { INDICATORS, type IndicatorDefinition } from '@/data/indicators'
 import { assess, worstStatus } from '@/engine/assess'
 import type { Assessment, BloodPressure, BodyRegion, IndicatorId, Reading, ReadingValue, Status } from '@/engine/types'
@@ -37,7 +37,7 @@ export function buildRows(readings: Reading[], baseline: Partial<Record<Indicato
       gaugeValue,
       baseline: base,
       baselineDeltaPct: base ? Math.round(((gaugeValue - base) / base) * 100) : undefined,
-      guidance: status === 'caution' || status === 'danger' ? GUIDANCE[id][status] : undefined,
+      guidance: status === 'caution' || status === 'danger' ? guidanceFor(status) : undefined,
     }
   })
 }

@@ -11,6 +11,7 @@ import { formatValue, type InstrumentRow } from './model'
 type Props = {
   rows: InstrumentRow[]
   mission: Mission
+  isDemo: boolean
   selectedRegion: BodyRegion | null
   selectedId: IndicatorId | null
   onSelect: (row: InstrumentRow | null) => void
@@ -39,6 +40,9 @@ function Row({ row, onSelect }: { row: InstrumentRow; onSelect: () => void }) {
           <span className="text-muted-foreground text-sm">{row.def.unit}</span>
           <span className="text-muted-foreground ml-auto text-xs tabular">{delta(row.baselineDeltaPct)}</span>
         </span>
+        <time className="text-muted-foreground text-xs tabular" dateTime={row.reading.takenAt}>
+          {new Date(row.reading.takenAt).toLocaleString()}
+        </time>
         <RangeGauge gauge={row.gauge} value={row.gaugeValue} baseline={row.baseline} />
       </button>
     </li>
@@ -87,13 +91,16 @@ function Detail({ row, onBack }: { row: InstrumentRow; onBack: () => void }) {
           {delta(row.baselineDeltaPct)}
           {row.baseline !== undefined ? ` (usual ${row.baseline} ${row.def.unit})` : ''}
         </p>
+        <time className="text-muted-foreground text-sm tabular" dateTime={row.reading.takenAt}>
+          Recorded {new Date(row.reading.takenAt).toLocaleString()}
+        </time>
         <RangeGauge gauge={row.gauge} value={row.gaugeValue} baseline={row.baseline} showScale className="mt-2" />
         {row.gauge.label && <p className="text-muted-foreground text-xs">Gauge shows {row.gauge.label.toLowerCase()} pressure.</p>}
       </div>
 
       {row.guidance && (
         <section aria-label="What to do" className={cn('rounded-lg p-4', status === 'danger' ? 'bg-status-danger-bg' : 'bg-status-caution-bg')}>
-          <h3 className="text-sm font-semibold">Do now</h3>
+          <h3 className="text-sm font-semibold">Prototype guidance</h3>
           <ul className="mt-1.5 flex list-disc flex-col gap-1 pl-5 text-sm">
             {row.guidance.doNow.map((d) => (
               <li key={d}>{d}</li>
@@ -125,7 +132,7 @@ function Detail({ row, onBack }: { row: InstrumentRow; onBack: () => void }) {
   )
 }
 
-export function Instruments({ rows, mission, selectedRegion, selectedId, onSelect, onLog }: Props) {
+export function Instruments({ rows, mission, isDemo, selectedRegion, selectedId, onSelect, onLog }: Props) {
   const regionRows = selectedRegion ? rows.filter((r) => r.def.region === selectedRegion) : []
   const detail = rows.find((r) => r.id === selectedId) ?? regionRows[0]
   const regionMeta = REGIONS.find((r) => r.id === selectedRegion)
@@ -156,7 +163,9 @@ export function Instruments({ rows, mission, selectedRegion, selectedId, onSelec
         <span className="text-muted-foreground text-xs tabular">{attention.length} of {rows.length}</span>
       </div>
       {attention.length === 0 ? (
-        <p className="text-muted-foreground py-3 text-sm">Everything is within your limits. Next check {mission.nextCheck}.</p>
+        <p className="text-muted-foreground py-3 text-sm">
+          Everything is within your limits. Next check {isDemo ? `${mission.nextCheck} (demo schedule)` : 'per your mission schedule'}.
+        </p>
       ) : (
         <ul className="mt-1">
           {attention.map((row) => (
@@ -169,7 +178,9 @@ export function Instruments({ rows, mission, selectedRegion, selectedId, onSelec
         <>
           <div className="mt-5 flex items-baseline justify-between border-t pt-4">
             <h2 className="text-base font-semibold">Within your limits</h2>
-            <span className="text-muted-foreground text-xs tabular">Next check {mission.nextCheck}</span>
+            <span className="text-muted-foreground text-xs tabular">
+              Next check {isDemo ? `${mission.nextCheck} (demo schedule)` : 'per your mission schedule'}
+            </span>
           </div>
           <ul className="mt-1">
             {fine.map((row) => (
@@ -183,7 +194,7 @@ export function Instruments({ rows, mission, selectedRegion, selectedId, onSelec
         Log reading
       </Button>
       <p className="text-muted-foreground mt-3 text-xs">
-        Streak {mission.streakDays} days · demo data · supports self-assessment only, it does not diagnose.
+        {isDemo ? `Demo streak: ${mission.streakDays} days` : 'Personal streak tracking is not available'} · supports self-assessment only, it does not diagnose.
       </p>
     </div>
   )

@@ -49,6 +49,7 @@ const SHORT_NAME: Record<BodyRegion, string> = {
 }
 
 const SEVERITY: Record<Status, number> = { normal: 0, 'no-data': 1, stale: 1, caution: 2, danger: 3 }
+const NO_BASELINE: Partial<Record<IndicatorId, number>> = {}
 
 function loadSafely<T>(load: () => T[], message: string) {
   try {
@@ -115,7 +116,8 @@ function App() {
   const currentCheck = checks.at(-1)
   const wellbeing = currentCheck ? assessWellbeing(currentCheck) : undefined
 
-  const rows = useMemo(() => buildRows(shownReadings, DEMO_BASELINE), [shownReadings])
+  const baseline = hasSavedData ? NO_BASELINE : DEMO_BASELINE
+  const rows = useMemo(() => buildRows(shownReadings, baseline), [shownReadings, baseline])
   const { attentionCount, top } = useMemo(() => summarize(rows), [rows])
   const overall = worstStatus([...rows.map((r) => r.assessment), ...(wellbeing ? [wellbeing] : [])])
   const regionStatus = useMemo(() => {
@@ -175,6 +177,7 @@ function App() {
                 <Instruments
                   rows={rows}
                   mission={DEMO_MISSION}
+                  isDemo={!hasSavedData}
                   selectedRegion={region}
                   selectedId={indicator}
                   onSelect={selectRow}

@@ -10,7 +10,7 @@ export function MissionTrack({ mission }: { mission: Mission }) {
     <div
       className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm"
       role="img"
-      aria-label={`${mission.modeLabel}: day ${mission.day} of ${mission.totalDays}; one-way signal delay to Earth ${mission.oneWayDelayMinutes} minutes`}
+      aria-label={`Illustrative demo mission, ${mission.modeLabel}: day ${mission.day} of ${mission.totalDays}; one-way signal delay to Earth ${mission.oneWayDelayMinutes} minutes`}
     >
       <span className="text-muted-foreground">{mission.origin}</span>
       <span className="relative block h-5 w-28 shrink-0 sm:w-40">
@@ -25,6 +25,7 @@ export function MissionTrack({ mission }: { mission: Mission }) {
         Day {mission.day}
         <span className="text-muted-foreground font-medium">/{mission.totalDays}</span>
       </span>
+      <span className="text-muted-foreground text-xs uppercase tracking-wide">Demo mission</span>
       <span className="text-muted-foreground border-l pl-3 whitespace-nowrap">
         Earth link <span className="font-numeric text-foreground text-[15px] font-semibold tabular">{mission.oneWayDelayMinutes} min</span>
       </span>
