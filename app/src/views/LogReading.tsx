@@ -1,6 +1,7 @@
 import { PageBanner } from '@/components/PageBanner'
 import { FEATURES } from '@/config/features'
 import { CameraPulse } from '@/features/camera-pulse/CameraPulse'
+import { useTouchDevice } from '@/features/camera-pulse/useTouchDevice'
 import { Page } from '@/shell/Page'
 import { Check, Minus, Plus, Send } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
@@ -101,6 +102,7 @@ function Stepper({ id, k, label, draft, setDraft, invalid }: { id: IndicatorId; 
 }
 
 export function LogReading() {
+  const touch = useTouchDevice()
   const { readings: latest } = useHealth()
   const { addReadings, history, simNow, sendReport, storageError } = useStore()
   const [draft, setDraft] = useState<Draft>(() => initialDraft(latest))
@@ -166,7 +168,7 @@ export function LogReading() {
           {storageError}
         </p>
       )}
-      {FEATURES.cameraPulse && <CameraPulse />}
+      {FEATURES.cameraPulse && touch && <CameraPulse />}
       <Panel aria-labelledby="form-title">
         <PanelHeader id="form-title" title="New reading" meta="Untick anything you did not measure." />
         <form
