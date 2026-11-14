@@ -3,13 +3,14 @@ import type { ReactNode } from 'react'
 import { CrewSwitcher } from '@/components/CrewSwitcher'
 import { FEATURES } from '@/config/features'
 import { PlayDemoButton } from '@/features/demo/DemoPlayer'
-import { DEMO_TODAY } from '@/data/demo-readings'
-import { MISSION_DAY_TODAY, MISSION_ORDER, MISSIONS } from '@/data/missions'
+import { MISSION_ORDER, MISSIONS } from '@/data/missions'
 import type { MissionMode } from '@/engine/types'
 import { pad, utcTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { href, type Route } from '@/state/route'
+import { met } from '@/lib/mission-clock'
 import { useSimNow, useStore } from '@/state/store'
+import { MissionRail } from './MissionRail'
 import { Backdrop } from './Backdrop'
 import { ThemeSwitch } from './ThemeSwitch'
 
@@ -39,12 +40,6 @@ const TITLES: Record<Route, string> = {
   tot: 'TOT assistant',
 }
 
-/* Mission elapsed time: day 1 started at 00:00 UTC, MISSION_DAY_TODAY - 1 days before the demo morning check */
-const LAUNCH = (() => {
-  const d = new Date(DEMO_TODAY)
-  d.setUTCHours(0, 0, 0, 0)
-  return d.getTime() - (MISSION_DAY_TODAY - 1) * 86_400_000
-})()
 
 export function Wordmark({ className }: { className?: string }) {
   return (
@@ -100,11 +95,7 @@ function MissionSwitcher() {
 function TopBar({ route }: { route: Route }) {
   const { clock } = useStore()
   const now = useSimNow(1000)
-  const met = Math.max(0, now - LAUNCH)
-  const d = Math.floor(met / 86_400_000)
-  const h = (met % 86_400_000) / 3_600_000
-  const m = (met % 3_600_000) / 60_000
-  const s = (met % 60_000) / 1000
+  const { d, h, m, s } = met(now)
   return (
     <header className="bg-card/95 border-border relative z-30 border-b backdrop-blur sm:sticky sm:top-0">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:h-14 sm:flex-nowrap sm:px-6 sm:py-0">
@@ -186,6 +177,7 @@ export function AppShell({ route, children }: { route: Route; children: ReactNod
           {children}
         </main>
       </div>
+      <MissionRail />
       <MobileNav route={route} />
     </div>
   )
