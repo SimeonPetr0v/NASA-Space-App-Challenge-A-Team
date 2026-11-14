@@ -1,7 +1,8 @@
-import { ArrowLeftRight, Moon, Sun } from 'lucide-react'
+import { Moon, Sun } from 'lucide-react'
 import { STATUS_META } from '@/components/StatusBadge'
 import { Button } from '@/components/ui/button'
 import type { Mission } from '@/data/mission'
+import { MissionTrack } from './MissionTrack'
 import type { Status } from '@/engine/types'
 import { cn } from '@/lib/utils'
 import type { InstrumentRow } from './model'
@@ -51,13 +52,7 @@ export function StatusStrip({ overall, attentionCount, top, mission, night, onTo
         )}
 
         <div className="text-muted-foreground ml-auto flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-          <span className="tabular whitespace-nowrap">
-            Day {mission.day} · {mission.modeLabel}
-          </span>
-          <span className="flex items-center gap-1.5 tabular whitespace-nowrap" title="One-way signal delay to Mission Control">
-            <ArrowLeftRight size={15} aria-hidden="true" />
-            Earth link {mission.oneWayDelayMinutes} min
-          </span>
+          <MissionTrack mission={mission} />
           <Button variant="outline" size="sm" onClick={onToggleNight} aria-pressed={night} className="min-h-9">
             {night ? <Sun size={15} aria-hidden="true" /> : <Moon size={15} aria-hidden="true" />}
             {night ? 'Day mode' : 'Night mode'}

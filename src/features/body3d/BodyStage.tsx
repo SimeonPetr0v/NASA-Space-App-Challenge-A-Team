@@ -2,6 +2,7 @@ import { Maximize2 } from 'lucide-react'
 import { lazy, Suspense, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import type { BodyRegion, Status } from '@/engine/types'
+import type { Callout } from './Callouts'
 
 const Body3D = lazy(() => import('./Body3D'))
 
@@ -17,18 +18,19 @@ const hasWebGL = () => {
 type Props = {
   theme: 'day' | 'night'
   statusByRegion: Record<BodyRegion, Status>
+  callouts: Partial<Record<BodyRegion, Callout>>
   selected: BodyRegion | null
   onSelect: (region: BodyRegion | null) => void
 }
 
-export function BodyStage({ theme, statusByRegion, selected, onSelect }: Props) {
+export function BodyStage({ theme, statusByRegion, callouts, selected, onSelect }: Props) {
   const [webgl] = useState(hasWebGL)
 
   return (
     <section aria-label="Body" className="bg-stage relative h-[60svh] min-h-[22rem] w-full lg:h-full" style={{ backgroundImage: "radial-gradient(60% 55% at 50% 42%, color-mix(in oklab, var(--card) 70%, transparent) 0%, transparent 100%)" }}>
       {webgl ? (
         <Suspense fallback={<p className="text-muted-foreground p-6 text-sm">Loading body model…</p>}>
-          <Body3D theme={theme} statusByRegion={statusByRegion} selected={selected} onSelect={onSelect} />
+          <Body3D theme={theme} statusByRegion={statusByRegion} callouts={callouts} selected={selected} onSelect={onSelect} />
         </Suspense>
       ) : (
         <p className="text-muted-foreground p-6 text-sm">The 3D body needs WebGL, which this device doesn't support. Use the readings list.</p>
@@ -41,7 +43,6 @@ export function BodyStage({ theme, statusByRegion, selected, onSelect }: Props) 
         </Button>
       )}
 
-      <p className="text-muted-foreground pointer-events-none absolute bottom-3 left-4 hidden text-xs xl:block">Drag to rotate · scroll to zoom · select an organ</p>
       <p className="text-muted-foreground absolute right-4 bottom-3 left-4 text-right text-[11px] leading-snug xl:left-auto xl:max-w-[55%]">
         Body model:{' '}
         <a className="underline underline-offset-2" href="https://humanatlas.io/3d-reference-library" target="_blank" rel="noreferrer">

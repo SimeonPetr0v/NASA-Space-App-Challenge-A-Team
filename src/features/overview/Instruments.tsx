@@ -35,7 +35,7 @@ function Row({ row, onSelect }: { row: InstrumentRow; onSelect: () => void }) {
           <StatusBadge status={row.assessment.status} size="sm" className="text-xs" />
         </span>
         <span className="flex items-baseline gap-1.5">
-          <span className="text-[26px] leading-none font-semibold tabular">{formatValue(row.reading.value)}</span>
+          <span className="font-numeric text-[30px] leading-none font-semibold tabular">{formatValue(row.reading.value)}</span>
           <span className="text-muted-foreground text-sm">{row.def.unit}</span>
           <span className="text-muted-foreground ml-auto text-xs tabular">{delta(row.baselineDeltaPct)}</span>
         </span>
@@ -57,7 +57,7 @@ function CompactRow({ row, onSelect }: { row: InstrumentRow; onSelect: () => voi
       >
         <Icon size={16} strokeWidth={2.25} className={text} aria-hidden="true" />
         <span className="text-sm">{row.def.label}</span>
-        <span className="ml-auto text-sm font-semibold tabular">
+        <span className="font-numeric ml-auto text-[15px] font-semibold tabular">
           {formatValue(row.reading.value)} <span className="text-muted-foreground font-normal">{row.def.unit}</span>
         </span>
       </button>
@@ -80,7 +80,7 @@ function Detail({ row, onBack }: { row: InstrumentRow; onBack: () => void }) {
           <StatusBadge status={status} />
         </div>
         <p className="flex items-baseline gap-1.5">
-          <span className="text-4xl font-semibold tabular">{formatValue(row.reading.value)}</span>
+          <span className="font-numeric text-5xl font-semibold tabular">{formatValue(row.reading.value)}</span>
           <span className="text-muted-foreground">{row.def.unit}</span>
         </p>
         <p className="text-muted-foreground text-sm tabular">

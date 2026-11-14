@@ -6,9 +6,10 @@ import { INDICATORS } from '@/data/indicators'
 import { DEMO_READINGS } from '@/data/demo-readings'
 import { DEMO_BASELINE, DEMO_MISSION } from '@/data/mission'
 import { worstStatus } from '@/engine/assess'
-import type { BodyRegion, IndicatorId, Reading } from '@/engine/types'
+import type { BodyRegion, IndicatorId, Reading, Status } from '@/engine/types'
 import { assessWellbeing, scoreWellbeing, type WellbeingCheck } from '@/engine/wellbeing'
 import { BodyStage } from '@/features/body3d/BodyStage'
+import type { Callout } from '@/features/body3d/Callouts'
 import { REGIONS } from '@/features/body3d/regions'
 import { Instruments } from '@/features/overview/Instruments'
 import { buildRows, formatValue, statusByRegion, summarize, type InstrumentRow } from '@/features/overview/model'
@@ -36,6 +37,18 @@ function ComingNext({ view, onBack }: { view: View; onBack: () => void }) {
     </div>
   )
 }
+
+const SHORT_NAME: Record<BodyRegion, string> = {
+  brain: 'Brain',
+  eyes: 'Eyes',
+  heart: 'Heart',
+  lungs: 'Lungs',
+  immune: 'Immune system',
+  musculoskeletal: 'Bones and muscles',
+  'whole-body': 'Metabolism',
+}
+
+const SEVERITY: Record<Status, number> = { normal: 0, 'no-data': 1, stale: 1, caution: 2, danger: 3 }
 
 function loadSafely<T>(load: () => T[], message: string) {
   try {
@@ -111,6 +124,21 @@ function App() {
     return base
   }, [rows, wellbeing])
 
+  const callouts = useMemo(() => {
+    const result: Partial<Record<BodyRegion, Callout>> = {}
+    for (const r of REGIONS) {
+      const lead = rows
+        .filter((row) => row.def.region === r.id)
+        .sort((a, b) => SEVERITY[b.assessment.status] - SEVERITY[a.assessment.status])[0]
+      result[r.id] = {
+        title: SHORT_NAME[r.id],
+        value: lead ? `${formatValue(lead.reading.value)} ${lead.def.unit}` : r.id === 'eyes' ? 'Not tracked yet' : undefined,
+        status: regionStatus[r.id],
+      }
+    }
+    return result
+  }, [rows, regionStatus])
+
   const selectRow = (row: InstrumentRow | null) => {
     setView('overview')
     setIndicator(row?.id ?? null)
@@ -139,7 +167,7 @@ function App() {
         <main className="grid min-h-0 lg:h-[calc(100svh-4rem)] lg:grid-cols-[minmax(0,1fr)_24rem]">
           {view === 'overview' && (
             <>
-              <BodyStage theme={night ? 'night' : 'day'} statusByRegion={regionStatus} selected={region} onSelect={selectRegion} />
+              <BodyStage theme={night ? 'night' : 'day'} statusByRegion={regionStatus} callouts={callouts} selected={region} onSelect={selectRegion} />
               <aside aria-label="Readings" className="bg-card overflow-y-auto border-t p-5 lg:border-t-0 lg:border-l">
                 <p className="text-muted-foreground mb-4 text-xs">
                   {hasSavedData ? 'Your latest readings, saved on this device' : 'Illustrative demo readings — log your own to replace them'}

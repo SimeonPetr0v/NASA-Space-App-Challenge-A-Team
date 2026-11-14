@@ -4,6 +4,9 @@ import type { IndicatorId, MissionMode } from '@/engine/types'
 
 export type Mission = {
   day: number
+  totalDays: number
+  origin: string
+  destination: string
   mode: MissionMode
   modeLabel: string
   oneWayDelayMinutes: number
@@ -13,6 +16,9 @@ export type Mission = {
 
 export const DEMO_MISSION: Mission = {
   day: 47,
+  totalDays: 210,
+  origin: 'Earth',
+  destination: 'Mars',
   mode: 'mars-transit',
   modeLabel: 'Mars transit',
   oneWayDelayMinutes: 14,

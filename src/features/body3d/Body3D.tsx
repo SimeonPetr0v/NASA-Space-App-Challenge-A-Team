@@ -3,18 +3,22 @@ import { Canvas } from '@react-three/fiber'
 import { Suspense, useEffect, useRef, useState } from 'react'
 import type { BodyRegion, Status } from '@/engine/types'
 import { BodyModel } from './BodyModel'
-import { STATUS_META } from '@/components/StatusBadge'
-import { STATUS_HEX } from './palette'
-import { HOME_VIEW, REGIONS } from './regions'
+import { type Callout, CalloutOverlay, type CalloutRefs, CalloutTracker } from './Callouts'
+import { HOME_VIEW } from './regions'
 import { useBodyModel } from './useBodyModel'
-
-const WORD: Record<Status, string> = { normal: 'nominal', caution: 'caution', danger: 'act now', 'no-data': 'not measured', stale: 'needs re-measuring' }
 
 export type Body3DProps = {
   theme: 'day' | 'night'
   statusByRegion: Record<BodyRegion, Status>
+  callouts: Partial<Record<BodyRegion, Callout>>
   selected: BodyRegion | null
   onSelect: (region: BodyRegion | null) => void
+}
+
+type SceneProps = Omit<Body3DProps, 'callouts'> & {
+  hovered: BodyRegion | null
+  onHover: (region: BodyRegion | null) => void
+  refs: CalloutRefs
 }
 
 const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -28,10 +32,9 @@ function Loading() {
   )
 }
 
-function Scene({ theme, statusByRegion, selected, onSelect }: Body3DProps) {
+function Scene({ theme, statusByRegion, selected, onSelect, hovered, onHover, refs }: SceneProps) {
   const model = useBodyModel()
   const [controls, setControls] = useState<CameraControls | null>(null)
-  const [hovered, setHovered] = useState<BodyRegion | null>(null)
   const placed = useRef(false)
 
   useEffect(() => {
@@ -55,65 +58,53 @@ function Scene({ theme, statusByRegion, selected, onSelect }: Body3DProps) {
         selected={selected}
         hovered={hovered}
         onSelect={(r) => onSelect(r === selected ? null : r)}
-        onHover={setHovered}
+        onHover={onHover}
       />
-
-      {REGIONS.map((r) => {
-        const status = statusByRegion[r.id]
-        const active = selected === r.id
-        const hidden = selected !== null && !active
-        return (
-          <Html key={r.id} position={model.geometry[r.id].markerAt} center zIndexRange={[20, 0]} style={{ pointerEvents: hidden ? 'none' : 'auto' }}>
-            <button
-              type="button"
-              onClick={() => onSelect(active ? null : r.id)}
-              onPointerEnter={() => setHovered(r.id)}
-              onPointerLeave={() => setHovered(null)}
-              aria-pressed={active}
-              aria-label={`${r.label}, ${WORD[status]}`}
-              className="bg-card/90 text-card-foreground flex size-8 items-center justify-center rounded-full border text-sm shadow-sm transition-opacity duration-200 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-              style={{ color: STATUS_HEX[theme][status], opacity: hidden ? 0 : 1 }}
-              tabIndex={hidden ? -1 : 0}
-            >
-              {(() => {
-                const { Icon } = STATUS_META[status]
-                return <Icon size={16} strokeWidth={2.25} aria-hidden="true" />
-              })()}
-            </button>
-          </Html>
-        )
-      })}
-
+      <CalloutTracker model={model} refs={refs} visible={selected === null} />
       <CameraControls ref={setControls} minDistance={0.25} maxDistance={5} smoothTime={0.35} />
     </>
   )
 }
 
-export default function Body3D(props: Body3DProps) {
+export default function Body3D({ callouts, ...props }: Body3DProps) {
   const { theme } = props
+  const [hovered, setHovered] = useState<BodyRegion | null>(null)
+  const overlay = useRef<HTMLDivElement>(null)
+  const refs = useRef<CalloutRefs>({ overlay, labels: {}, lines: {}, dots: {} }).current
+
   return (
-    <Canvas
-      camera={{ position: HOME_VIEW.position, fov: 35, near: 0.02, far: 50 }}
-      dpr={[1, 2]}
-      aria-label="Interactive 3D body. Use the status markers or the body systems list to inspect each system."
-    >
-      <ambientLight intensity={theme === 'night' ? 0.35 : 0.75} />
-      <directionalLight position={[2, 3, 2]} intensity={theme === 'night' ? 0.6 : 1.3} color={theme === 'night' ? '#ffe2c4' : '#ffffff'} />
-      <directionalLight position={[-2, 1.5, -2]} intensity={0.45} color={theme === 'night' ? '#f3d2b0' : '#cfe3ff'} />
-      <directionalLight position={[0, 1, 3]} intensity={theme === 'night' ? 0.25 : 0.5} />
+    <div className="relative h-full w-full">
+      <Canvas
+        camera={{ position: HOME_VIEW.position, fov: 35, near: 0.02, far: 50 }}
+        dpr={[1, 2]}
+        aria-label="Interactive 3D body. Use the labels or the readings list to inspect each body system."
+      >
+        <ambientLight intensity={theme === 'night' ? 0.35 : 0.75} />
+        <directionalLight position={[2, 3, 2]} intensity={theme === 'night' ? 0.6 : 1.3} color={theme === 'night' ? '#ffe2c4' : '#ffffff'} />
+        <directionalLight position={[-2, 1.5, -2]} intensity={0.45} color={theme === 'night' ? '#f3d2b0' : '#cfe3ff'} />
+        <directionalLight position={[0, 1, 3]} intensity={theme === 'night' ? 0.25 : 0.5} />
 
-      <Environment resolution={256} frames={1}>
-        <Lightformer form="rect" intensity={theme === 'night' ? 0.9 : 2.4} color={theme === 'night' ? '#ffe2c4' : '#ffffff'} position={[0, 4, 3]} scale={[6, 3, 1]} />
-        <Lightformer form="rect" intensity={theme === 'night' ? 0.6 : 1.2} color={theme === 'night' ? '#f3d2b0' : '#dfeaff'} position={[-4, 1.5, 1]} rotation-y={Math.PI / 2} scale={[4, 2, 1]} />
-        <Lightformer form="rect" intensity={theme === 'night' ? 0.5 : 1} color={theme === 'night' ? '#ffe2c4' : '#fff4e8'} position={[4, 1, -1]} rotation-y={-Math.PI / 2} scale={[4, 2, 1]} />
-        <Lightformer form="ring" intensity={theme === 'night' ? 0.4 : 0.8} position={[0, 1, -4]} scale={2} />
-      </Environment>
+        <Environment resolution={256} frames={1}>
+          <Lightformer form="rect" intensity={theme === 'night' ? 0.9 : 2.4} color={theme === 'night' ? '#ffe2c4' : '#ffffff'} position={[0, 4, 3]} scale={[6, 3, 1]} />
+          <Lightformer form="rect" intensity={theme === 'night' ? 0.6 : 1.2} color={theme === 'night' ? '#f3d2b0' : '#dfeaff'} position={[-4, 1.5, 1]} rotation-y={Math.PI / 2} scale={[4, 2, 1]} />
+          <Lightformer form="rect" intensity={theme === 'night' ? 0.5 : 1} color={theme === 'night' ? '#ffe2c4' : '#fff4e8'} position={[4, 1, -1]} rotation-y={-Math.PI / 2} scale={[4, 2, 1]} />
+          <Lightformer form="ring" intensity={theme === 'night' ? 0.4 : 0.8} position={[0, 1, -4]} scale={2} />
+        </Environment>
 
-      <Suspense fallback={<Loading />}>
-        <Scene {...props} />
-      </Suspense>
+        <Suspense fallback={<Loading />}>
+          <Scene {...props} hovered={hovered} onHover={setHovered} refs={refs} />
+        </Suspense>
 
-      <ContactShadows position={[0, 0, 0]} opacity={theme === 'night' ? 0.25 : 0.35} scale={2.5} blur={2.4} far={1} />
-    </Canvas>
+        <ContactShadows position={[0, 0, 0]} opacity={theme === 'night' ? 0.25 : 0.35} scale={2.5} blur={2.4} far={1} />
+      </Canvas>
+
+      <CalloutOverlay
+        refs={refs}
+        callouts={callouts}
+        visible={props.selected === null}
+        onSelect={(r) => props.onSelect(r)}
+        onHover={setHovered}
+      />
+    </div>
   )
 }
