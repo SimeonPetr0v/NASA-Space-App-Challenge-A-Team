@@ -124,6 +124,81 @@ function torsoHalfWidth(env) {
   }
 }
 
+/*
+  Mannequin groin: Laplacian smoothing restricted to an ellipsoid around the
+  genitals, with its edge pinned, so the area becomes a smooth surface.
+*/
+const GROIN = { centre: [0, 0.79, 0.06], radius: [0.085, 0.085, 0.09], minZ: -0.03, iterations: 500, step: 0.6 }
+
+export async function smoothGroin(doc, log = console.log) {
+  const root = doc.getRoot()
+  const skins = meshNodes(root).filter(isSkin)
+  let freed = 0
+  for (const node of skins) {
+    const m = node.getWorldMatrix()
+    const inv = invertAffine(m)
+    for (const prim of node.getMesh().listPrimitives()) {
+      const accessor = prim.getAttribute('POSITION')
+      const arr = accessor.getArray().slice()
+      const count = arr.length / 3
+
+      const canon = new Int32Array(count)
+      const keyToId = new Map()
+      const pos = []
+      for (let i = 0; i < count; i++) {
+        const key = `${arr[i * 3].toFixed(5)},${arr[i * 3 + 1].toFixed(5)},${arr[i * 3 + 2].toFixed(5)}`
+        let id = keyToId.get(key)
+        if (id === undefined) {
+          id = pos.length
+          keyToId.set(key, id)
+          pos.push(apply(m, arr[i * 3], arr[i * 3 + 1], arr[i * 3 + 2]))
+        }
+        canon[i] = id
+      }
+
+      const neighbours = pos.map(() => new Set())
+      const idx = prim.getIndices()?.getArray()
+      const triCount = idx ? idx.length / 3 : count / 3
+      for (let t = 0; t < triCount; t++) {
+        const [a, b, c] = [0, 1, 2].map((k) => canon[idx ? idx[t * 3 + k] : t * 3 + k])
+        neighbours[a].add(b).add(c)
+        neighbours[b].add(a).add(c)
+        neighbours[c].add(a).add(b)
+      }
+
+      const weight = pos.map((p) => {
+        if (p[2] < GROIN.minZ) return 0
+        const d = Math.hypot(...[0, 1, 2].map((a) => (p[a] - GROIN.centre[a]) / GROIN.radius[a]))
+        return d >= 1 ? 0 : smooth(1 - d)
+      })
+      const free = weight.map((w, i) => (w > 0 ? i : -1)).filter((i) => i >= 0)
+      freed += free.length
+
+      for (let it = 0; it < GROIN.iterations; it++) {
+        const next = free.map((i) => {
+          const nb = [...neighbours[i]]
+          const avg = [0, 0, 0]
+          for (const j of nb) for (let a = 0; a < 3; a++) avg[a] += pos[j][a] / nb.length
+          const k = GROIN.step * Math.min(1, weight[i] * 2)
+          return pos[i].map((v, a) => v + (avg[a] - v) * k)
+        })
+        free.forEach((i, n) => (pos[i] = next[n]))
+      }
+
+      for (let i = 0; i < count; i++) {
+        const local = apply(inv, ...pos[canon[i]])
+        arr[i * 3] = local[0]
+        arr[i * 3 + 1] = local[1]
+        arr[i * 3 + 2] = local[2]
+      }
+      accessor.setArray(arr)
+      prim.setAttribute('NORMAL', null)
+    }
+  }
+  await doc.transform(normals({ overwrite: true }))
+  log(`groin smoothed: ${freed.toLocaleString()} skin vertices reshaped`)
+}
+
 export async function slimSkin(doc, log = console.log) {
   const root = doc.getRoot()
   const nodes = meshNodes(root)
