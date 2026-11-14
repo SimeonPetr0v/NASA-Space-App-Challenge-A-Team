@@ -17,7 +17,7 @@ import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions'
 import { flatten, getBounds, join, normals, prune, quantize, simplifyPrimitive, weld, weldPrimitive } from '@gltf-transform/functions'
 import { MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer'
-import { slimSkin } from './slim-skin.mjs'
+import { slimSkin, smoothGroin } from './slim-skin.mjs'
 
 const input = process.argv[2]
 if (!input) {
@@ -257,6 +257,7 @@ console.log('final bounds min', final.min.map((v) => v.toFixed(3)), 'max', final
 
 if (bp3dDir) await addBodyParts3D(bp3dDir)
 if (!process.argv.includes("--no-slim")) await slimSkin(doc)
+if (!process.argv.includes("--no-mannequin")) await smoothGroin(doc)
 
 await doc.transform(quantize())
 doc.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE })
