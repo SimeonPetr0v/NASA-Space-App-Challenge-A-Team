@@ -31,6 +31,8 @@ Two committed differentiators:
 
 3. **Sleep-shift night mode** (committed 2026-11-14). A circadian countermeasure, not a dark theme: during the crew sleep window the app drops blue light and shows only status, one action and quick night actions; danger alerts still escalate. Plan: `docs/night-mode.md`.
 
+4. **Flight surgeon view (Earth ↔ Mars link)** (committed 2026-11-14). A second screen shows the Earth side: reports travel to the flight surgeon and replies travel back with the real light-time delay for the mission mode (Mars ~3–22 min one way), while the astronaut gets guidance immediately. Simulated in the browser; no backend. Plan: `docs/flight-surgeon-view.md`.
+
 Considered but not committed: personal-baseline drift alerts. May be added if time allows; do not present it as core.
 
 ## Operating Context
