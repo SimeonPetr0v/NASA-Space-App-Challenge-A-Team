@@ -1,6 +1,6 @@
 /*
   Shared data contract between UI and engine (see team-git-workflow skill).
-  Agree changes in team chat before editing — every role builds against this file.
+  Agree changes in team chat before editing - every role builds against this file.
 */
 
 export type IndicatorId =
@@ -45,4 +45,32 @@ export type Assessment = {
   sourceUrl: string
 }
 
+/** Who should be involved, from least to most. */
+export type Escalation = 'none' | 'self-care' | 'crew-medical-officer' | 'flight-surgeon'
+
+/** A rule that fires on a combination of indicators (astro-health-science reference). */
+export type CombinationFinding = {
+  id: string
+  title: string
+  detail: string
+  indicators: IndicatorId[]
+  escalation: Escalation
+}
+
 export type BodyRegion = 'brain' | 'eyes' | 'heart' | 'lungs' | 'musculoskeletal' | 'immune' | 'whole-body'
+
+/** Message on the simulated crew <-> Earth link (docs/flight-surgeon-view.md). */
+export type LinkMessage = {
+  id: string
+  direction: 'to-earth' | 'to-crew'
+  kind: 'report' | 'reply'
+  createdAt: string
+  arrivesAt: string
+  payload: {
+    assessments?: Assessment[]
+    readings?: Reading[]
+    note?: string
+    replyTemplate?: string
+    inReplyTo?: string
+  }
+}

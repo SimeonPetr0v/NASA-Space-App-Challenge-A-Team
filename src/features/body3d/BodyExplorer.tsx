@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo, useState } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import { StatusBadge } from '@/components/StatusBadge'
-import { Button } from '@/components/ui/button'
 import { INDICATORS } from '@/data/indicators'
 import type { Assessment, BodyRegion, BloodPressure, Reading, ReadingValue, Status } from '@/engine/types'
 import { cn } from '@/lib/utils'
@@ -43,31 +43,41 @@ export function BodyExplorer({ readings, assessments, theme }: Props) {
 
   const region = REGIONS.find((r) => r.id === selected)
   const regionReadings = readings
-    .map((reading, i) => ({ reading, assessment: assessments[i], def: INDICATORS[reading.indicatorId] }))
+    .map((reading, i) => ({ reading, assessment: assessments.find((a) => a.indicatorId === reading.indicatorId) ?? assessments[i], def: INDICATORS[reading.indicatorId] }))
     .filter((x) => x.def.region === selected)
 
   return (
-    <section aria-label="Body explorer" className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-      <div className="bg-card relative h-[28rem] overflow-hidden rounded-xl border sm:h-[34rem]">
-        {webgl ? (
-          <Suspense fallback={<p className="text-muted-foreground p-4 text-sm">Loading 3D body…</p>}>
-            <Body3D theme={theme} statusByRegion={statusByRegion} selected={selected} onSelect={setSelected} />
-          </Suspense>
-        ) : (
-          <p className="text-muted-foreground p-4 text-sm">3D view is not available on this device. Use the body systems list.</p>
-        )}
+    <div className="grid lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="bg-muted/40 relative h-[26rem] overflow-hidden sm:h-[34rem]">
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 [background-image:linear-gradient(var(--chart-grid)_1px,transparent_1px),linear-gradient(90deg,var(--chart-grid)_1px,transparent_1px)] [background-size:32px_32px] opacity-70"
+        />
+        <div className="absolute inset-0">
+          {webgl ? (
+            <Suspense fallback={<p className="text-muted-foreground p-4 text-sm">Loading 3D body…</p>}>
+              <Body3D theme={theme} statusByRegion={statusByRegion} selected={selected} onSelect={setSelected} />
+            </Suspense>
+          ) : (
+            <p className="text-muted-foreground p-4 text-sm">3D view is not available on this device. Use the body systems list.</p>
+          )}
+        </div>
         {selected && (
-          <Button variant="outline" size="sm" className="absolute top-3 left-3" onClick={() => setSelected(null)}>
-            Whole body view
-          </Button>
+          <button
+            type="button"
+            className="bg-card border-border-strong hover:bg-muted absolute top-3 left-3 flex min-h-11 items-center gap-2 rounded-sm border px-3 text-sm font-medium"
+            onClick={() => setSelected(null)}
+          >
+            <ArrowLeft className="size-4" aria-hidden="true" /> Whole body
+          </button>
         )}
-        <p className="text-muted-foreground pointer-events-none absolute bottom-3 left-3 text-xs">Drag to rotate · scroll to zoom · select a marker</p>
-        <p className="text-muted-foreground absolute top-3 right-3 max-w-[60%] text-right text-[10px] leading-snug">
-          Body model:{' '}
+        <p className="label text-subtle-foreground pointer-events-none absolute bottom-3 left-4 hidden sm:block">Drag to rotate · scroll to zoom</p>
+        <p className="text-subtle-foreground absolute right-3 bottom-3 max-w-[60%] text-right text-[10px] leading-snug">
+          Model:{' '}
           <a className="underline underline-offset-2" href="https://humanatlas.io/3d-reference-library" target="_blank" rel="noreferrer">
-            HuBMAP Human Reference Atlas
+            HuBMAP HRA
           </a>
-          ; ribs & heart vessels:{' '}
+          ;{' '}
           <a className="underline underline-offset-2" href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/" target="_blank" rel="noreferrer">
             BodyParts3D © DBCLS
           </a>
@@ -75,56 +85,65 @@ export function BodyExplorer({ readings, assessments, theme }: Props) {
         </p>
       </div>
 
-      <div className="flex flex-col gap-3">
-        <nav aria-label="Body systems" className="bg-card rounded-xl border p-2">
-          <ul className="flex flex-col">
+      <div className="border-border flex flex-col border-t lg:border-t-0 lg:border-l">
+        <nav aria-label="Body systems">
+          <ul>
             {REGIONS.map((r) => (
-              <li key={r.id}>
+              <li key={r.id} className="border-border border-b">
                 <button
                   type="button"
                   aria-pressed={selected === r.id}
                   onClick={() => setSelected(selected === r.id ? null : r.id)}
                   className={cn(
-                    'hover:bg-accent focus-visible:ring-ring flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-3 text-left text-sm focus-visible:ring-2 focus-visible:outline-none',
-                    selected === r.id && 'bg-accent',
+                    'hover:bg-muted relative flex min-h-11 w-full items-center justify-between gap-3 px-4 text-left text-sm transition-colors',
+                    selected === r.id && 'bg-accent font-medium',
                   )}
                 >
+                  {selected === r.id && <span aria-hidden="true" className="bg-primary absolute inset-y-0 left-0 w-0.5" />}
                   <span>{r.label}</span>
-                  <StatusBadge status={statusByRegion[r.id]} className="shrink-0 text-xs" />
+                  <StatusBadge status={statusByRegion[r.id]} className="shrink-0" />
                 </button>
               </li>
             ))}
           </ul>
         </nav>
 
-        {region && (
-          <article aria-live="polite" className="bg-card rounded-xl border p-4">
-            <h2 className="font-semibold">{region.label}</h2>
-            <p className="text-muted-foreground mt-1 text-sm">{region.summary}</p>
+        {region ? (
+          <article aria-live="polite" className="view-in p-4">
+            <p className="label text-muted-foreground">Why it matters in space</p>
+            <h3 className="mt-1 text-base font-semibold tracking-tight">{region.label}</h3>
+            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">{region.summary}</p>
             {regionReadings.length === 0 ? (
-              <p className="mt-3 text-sm">No measurement tracked for this system yet.</p>
+              <p className="text-muted-foreground border-border mt-3 border-t pt-3 text-sm">No measurement tracked for this system yet.</p>
             ) : (
-              <ul className="mt-3 flex flex-col gap-3">
+              <ul className="mt-3 grid gap-3">
                 {regionReadings.map(({ reading, assessment, def }) => (
-                  <li key={def.id} className="border-t pt-3 first:border-t-0 first:pt-0">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-sm">{def.label}</span>
-                      <StatusBadge status={assessment.status} className="text-xs" />
+                  <li key={def.id} className="border-border border-t pt-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium">{def.label}</span>
+                      <StatusBadge status={assessment.status} />
                     </div>
-                    <p className="text-xl font-semibold tabular-nums">
+                    <p className="num mt-1 text-2xl font-semibold">
                       {formatValue(reading.value)} <span className="text-muted-foreground text-sm font-normal">{def.unit}</span>
                     </p>
-                    <p className="text-muted-foreground text-xs">{def.whyInSpace}</p>
-                    <a className="text-xs underline underline-offset-2" href={def.sourceUrl} target="_blank" rel="noreferrer">
-                      Source
-                    </a>
+                    <p className="text-muted-foreground mt-1 text-xs leading-relaxed">{def.whyInSpace}</p>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                      <span className="text-subtle-foreground">Hazard {def.hazards.join(' · ')}</span>
+                      <a className="font-medium underline underline-offset-2" href={def.sourceUrl} target="_blank" rel="noreferrer">
+                        Source
+                      </a>
+                    </div>
                   </li>
                 ))}
               </ul>
             )}
           </article>
+        ) : (
+          <p className="text-muted-foreground p-4 text-sm leading-relaxed">
+            Select a body system to see its indicators, the spaceflight hazard behind them and how to measure.
+          </p>
         )}
       </div>
-    </section>
+    </div>
   )
 }
