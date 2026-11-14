@@ -6,6 +6,7 @@ import { MissionTrack } from '@/components/MissionTrack'
 import { FEATURES } from '@/config/features'
 import { RadiationBudget } from '@/features/radiation/RadiationBudget'
 import { TrendWatch } from '@/features/trends/TrendWatch'
+import { ScheduleChip } from '@/features/schedule/ScheduleChip'
 import { RangeGauge } from '@/components/RangeGauge'
 import { Page } from '@/shell/Page'
 import { Panel, PanelHeader } from '@/components/Panel'
@@ -281,7 +282,10 @@ export function Overview() {
   const { theme, mode, delaySec } = useStore()
   return (
     <Page className="grid grid-cols-[minmax(0,1fr)] gap-8 pt-6 pb-16">
-      <MissionTrack mode={mode} delaySec={delaySec} />
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <MissionTrack mode={mode} delaySec={delaySec} />
+        {FEATURES.scheduleReminders && <ScheduleChip />}
+      </div>
       {theme === 'night' && (
         <a
           href={href('sleep')}

@@ -1,4 +1,6 @@
 import { PageBanner } from '@/components/PageBanner'
+import { FEATURES } from '@/config/features'
+import { WhyItMatters } from '@/features/why/WhyItMatters'
 import { RevealGrid } from '@/components/motion'
 import { Page } from '@/shell/Page'
 import { Panel, PanelHeader } from '@/components/Panel'
@@ -15,6 +17,8 @@ export function Methodology() {
       How readings become a status, guidance and escalation, and where every threshold comes from.
     </PageBanner>
     <Page>
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-6">
+    {FEATURES.whyItMatters && <WhyItMatters />}
     <RevealGrid className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <Panel aria-labelledby="how-title">
         <PanelHeader id="how-title" title="How the assessment works" />
@@ -73,7 +77,7 @@ export function Methodology() {
                       ? 'Escalation logic and the Earth link'
                       : INDICATOR_ORDER.filter((id) => INDICATORS[id].hazards.includes(h))
                           .map((id) => INDICATORS[id].label)
-                          .join(', ') || 'Planned: dosimeter dose'}
+                          .join(', ') || (FEATURES.radiation ? 'Radiation budget: mission dose vs the 600 mSv career limit' : 'Planned: dosimeter dose')}
                   </td>
                 </tr>
               ))}
@@ -142,6 +146,7 @@ export function Methodology() {
         data. Built for the NASA Space Apps Challenge 2026; not affiliated with or endorsed by NASA.
       </p>
     </RevealGrid>
+    </div>
     </Page>
     </>
   )
