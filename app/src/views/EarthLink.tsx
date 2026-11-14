@@ -1,5 +1,6 @@
 import { PageBanner } from '@/components/PageBanner'
 import { RevealGrid } from '@/components/motion'
+import { SignalPath } from '@/components/SignalPath'
 import { Page } from '@/shell/Page'
 import { Send, Stethoscope } from 'lucide-react'
 import { Panel, PanelHeader } from '@/components/Panel'
@@ -29,6 +30,11 @@ const REPLIES = [
 ]
 
 const SPEEDS = [1, 60, 600]
+
+const lastArrival = (messages: LinkMessage[], direction: LinkMessage['direction'], now: number) => {
+  const times = messages.filter((m) => m.direction === direction).map((m) => Date.parse(m.arrivesAt)).filter((t) => t <= now)
+  return times.length ? Math.max(...times) : undefined
+}
 
 function Transit({ msg, now }: { msg: LinkMessage; now: number }) {
   const start = Date.parse(msg.createdAt)
@@ -99,26 +105,12 @@ export function EarthLink() {
         />
         <div className="grid gap-5 p-4 sm:p-5 md:grid-cols-[1fr_auto] md:items-end">
           <div>
-            <div className="flex items-center gap-3 text-xs">
-              <span className="label text-muted-foreground w-12">Crew</span>
-              <div className="bg-border relative h-px flex-1">
-                {inFlight.map((m) => {
-                  const s = Date.parse(m.createdAt)
-                  const e = Date.parse(m.arrivesAt)
-                  const p = Math.min(1, Math.max(0, (now - s) / Math.max(1, e - s)))
-                  const pos = m.direction === 'to-earth' ? p : 1 - p
-                  return (
-                    <span
-                      key={m.id}
-                      aria-hidden="true"
-                      className={cn('absolute top-1/2 h-2.5 w-6 -translate-x-1/2 -translate-y-1/2', m.direction === 'to-earth' ? 'bg-primary' : 'bg-foreground')}
-                      style={{ left: `${pos * 100}%` }}
-                    />
-                  )
-                })}
-              </div>
-              <span className="label text-muted-foreground w-12 text-right">Earth</span>
-            </div>
+            <SignalPath
+              inFlight={inFlight}
+              now={now}
+              lastToEarth={lastArrival(messages, 'to-earth', now)}
+              lastToCrew={lastArrival(messages, 'to-crew', now)}
+            />
             <p className="text-muted-foreground mt-3 text-sm">{mission.context}</p>
           </div>
           <div className="flex flex-wrap items-end gap-4">

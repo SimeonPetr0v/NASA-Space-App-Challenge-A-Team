@@ -2,10 +2,23 @@ import { motion } from 'motion/react'
 import type { ReactNode } from 'react'
 import { EASE_OUT } from '@/components/motion-config'
 
-/** Compact deep-space header used at the top of inner views */
+/*
+  Compact deep-space header used at the top of inner views.
+  Motion: the title rises word by word out of a mask once per view (orientation
+  on arrival); stars, the ECG trace and a slow nebula drift run in CSS and stop
+  under reduced motion.
+*/
 export function PageBanner({ eyebrow, title, children }: { eyebrow: string; title: string; children?: ReactNode }) {
+  const words = title.split(' ')
   return (
     <section className="bg-space relative isolate overflow-hidden">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-20 overflow-hidden">
+        <div className="nebula absolute -top-1/2 right-[-10%] h-[200%] w-[60%] rounded-full bg-[radial-gradient(closest-side,color-mix(in_oklab,var(--space-3)_55%,transparent),transparent)] opacity-60" />
+        <div
+          className="nebula absolute -bottom-1/2 left-[-15%] h-[180%] w-[50%] rounded-full bg-[radial-gradient(closest-side,color-mix(in_oklab,var(--space-2)_60%,transparent),transparent)] opacity-50"
+          style={{ animationDelay: '-11s' }}
+        />
+      </div>
       <svg aria-hidden="true" className="absolute inset-0 -z-10 h-full w-full">
         {Array.from({ length: 40 }, (_, i) => (
           <circle
@@ -27,17 +40,29 @@ export function PageBanner({ eyebrow, title, children }: { eyebrow: string; titl
           <motion.p initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE_OUT }} className="label text-space-muted">
             {eyebrow}
           </motion.p>
-          <motion.h1
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, ease: EASE_OUT, delay: 0.08 }}
-            className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl"
-          >
-            {title}
-          </motion.h1>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl" aria-label={title}>
+            {words.map((w, i) => (
+              <span key={`${w}-${i}`} aria-hidden="true" className="inline-block overflow-hidden pb-1 align-bottom">
+                <motion.span
+                  className="inline-block"
+                  initial={{ y: '105%' }}
+                  animate={{ y: '0%' }}
+                  transition={{ duration: 0.75, ease: EASE_OUT, delay: 0.08 + i * 0.07 }}
+                >
+                  {w}
+                  {i < words.length - 1 ? ' ' : ''}
+                </motion.span>
+              </span>
+            ))}
+          </h1>
         </div>
         {children && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, delay: 0.2 }} className="text-space-muted max-w-md text-sm">
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: EASE_OUT, delay: 0.25 }}
+            className="text-space-muted max-w-md text-sm"
+          >
             {children}
           </motion.div>
         )}

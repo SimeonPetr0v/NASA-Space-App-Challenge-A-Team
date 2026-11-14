@@ -44,7 +44,11 @@ function MarkerProjector({ geometry, markers, onPlaced }: { geometry: ReturnType
   const { camera, size } = useThree()
   const v = useRef(new THREE.Vector3())
   const placed = useRef(false)
-  useFrame(() => {
+  const still = useRef(reducedMotion())
+  const smooth = useRef<Partial<Record<BodyRegion, { x: number; y: number }>>>({})
+  useFrame((_, delta) => {
+    camera.updateMatrixWorld()
+    const k = still.current ? 1 : 1 - Math.exp(-delta * 18)
     const items: { id: BodyRegion; side: 1 | -1; ax: number; ay: number; behind: boolean }[] = []
     for (const r of REGIONS) {
       v.current.set(...geometry[r.id].markerAt).project(camera)
@@ -69,14 +73,19 @@ function MarkerProjector({ geometry, markers, onPlaced }: { geometry: ReturnType
         const w = els.label.offsetWidth
         let lx = side < 0 ? it.ax - OFFSET - w : it.ax + OFFSET
         lx = Math.min(Math.max(lx, 6), size.width - w - 6)
+        const prevPos = smooth.current[it.id]
+        const sx = prevPos ? prevPos.x + (lx - prevPos.x) * k : lx
+        const sy = prevPos ? prevPos.y + (ly - prevPos.y) * k : ly
+        smooth.current[it.id] = { x: sx, y: sy }
+        lx = sx
         const edgeX = side < 0 ? lx + w : lx
         // oxlint-disable-next-line react/immutability -- imperative per-frame DOM update is the R3F pattern
-        els.label.style.transform = `translate(${lx.toFixed(1)}px, ${(ly - 14).toFixed(1)}px)`
-        els.dot.style.transform = `translate(${(it.ax - 4).toFixed(1)}px, ${(it.ay - 4).toFixed(1)}px)`
+        els.label.style.transform = `translate3d(${lx.toFixed(1)}px, ${(sy - 14).toFixed(1)}px, 0)`
+        els.dot.style.transform = `translate3d(${(it.ax - 4).toFixed(1)}px, ${(it.ay - 4).toFixed(1)}px, 0)`
         els.line.setAttribute('x1', it.ax.toFixed(1))
         els.line.setAttribute('y1', it.ay.toFixed(1))
         els.line.setAttribute('x2', edgeX.toFixed(1))
-        els.line.setAttribute('y2', ly.toFixed(1))
+        els.line.setAttribute('y2', sy.toFixed(1))
         const vis = it.behind ? 'hidden' : 'visible'
         els.label.style.visibility = vis
         els.dot.style.visibility = vis
@@ -158,6 +167,18 @@ export default function Body3D(props: Body3DProps) {
       </Canvas>
 
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {placed && !reducedMotion() && (
+          <motion.div
+            aria-hidden="true"
+            className="absolute inset-x-0 top-0 h-full"
+            initial={{ y: '-8%', opacity: 0 }}
+            animate={{ y: '100%', opacity: [0, 1, 1, 0] }}
+            transition={{ duration: 1.4, ease: [0.65, 0, 0.35, 1], times: [0, 0.1, 0.8, 1] }}
+          >
+            <div className="h-16 bg-gradient-to-b from-transparent to-[color-mix(in_oklab,var(--primary)_14%,transparent)]" />
+            <div className="bg-primary/60 h-px" />
+          </motion.div>
+        )}
         <svg className="absolute inset-0 h-full w-full" aria-hidden="true">
           {REGIONS.map((r, i) => {
             const hidden = selected !== null && selected !== r.id
