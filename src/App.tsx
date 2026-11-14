@@ -6,6 +6,7 @@ import { useRoute } from '@/state/route'
 import { StoreProvider, useStore } from '@/state/store'
 import { EarthLink } from '@/views/EarthLink'
 import { LogReading } from '@/views/LogReading'
+import { Brief } from '@/views/Brief'
 import { Methodology } from '@/views/Methodology'
 import { NightView } from '@/views/NightView'
 import { Overview } from '@/views/Overview'
@@ -43,6 +44,7 @@ function Screens() {
                   {route === 'trends' && <Trends param={param} />}
                   {route === 'link' && <EarthLink />}
                   {route === 'method' && <Methodology />}
+                  {route === 'brief' && <Brief />}
                 </motion.div>
               </AnimatePresence>
             </AppShell>

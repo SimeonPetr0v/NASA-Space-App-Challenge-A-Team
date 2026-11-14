@@ -1,4 +1,4 @@
-import { BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Moon, RadioTower } from 'lucide-react'
+import { BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Moon, RadioTower, Rocket } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { DEMO_TODAY } from '@/data/demo-readings'
 import { MISSION_DAY_TODAY, MISSION_ORDER, MISSIONS } from '@/data/missions'
@@ -14,6 +14,7 @@ const NAV: { route: Route; label: string; icon: typeof LayoutDashboard }[] = [
   { route: 'trends', label: 'Trends', icon: ChartLine },
   { route: 'link', label: 'Earth link', icon: RadioTower },
   { route: 'method', label: 'Methodology', icon: BookOpen },
+  { route: 'brief', label: 'Mission brief', icon: Rocket },
 ]
 
 const TITLES: Record<Route, string> = {
@@ -22,6 +23,7 @@ const TITLES: Record<Route, string> = {
   trends: 'Trends',
   link: 'Earth link',
   method: 'Methodology',
+  brief: 'Mission brief',
 }
 
 /* Mission elapsed time: day 1 started at 00:00 UTC, MISSION_DAY_TODAY - 1 days before the demo morning check */
@@ -194,7 +196,7 @@ function MobileNav({ route }: { route: Route }) {
         >
           {route === r && <span aria-hidden="true" className="bg-foreground absolute inset-x-4 top-0 h-0.5" />}
           <Icon className="size-[1.125rem]" strokeWidth={1.75} aria-hidden="true" />
-          <span className="max-w-full truncate px-1">{label.replace('Log reading', 'Log').replace('Methodology', 'Method')}</span>
+          <span className="max-w-full truncate px-1">{label.replace('Log reading', 'Log').replace('Methodology', 'Method').replace('Mission brief', 'Brief')}</span>
         </a>
       ))}
     </nav>
