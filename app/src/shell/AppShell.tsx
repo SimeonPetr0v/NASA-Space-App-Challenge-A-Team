@@ -106,7 +106,7 @@ function MissionSwitcher() {
   const { mode, setMode } = useStore()
   return (
     <>
-      <div role="radiogroup" aria-label="Mission mode" className="border-border-strong hidden h-9 items-stretch rounded-sm border md:flex">
+      <div role="radiogroup" aria-label="Mission mode" className="border-border-strong hidden h-9 items-stretch rounded-sm border lg:flex">
         {MISSION_ORDER.map((id, i) => (
           <button
             key={id}
@@ -124,12 +124,12 @@ function MissionSwitcher() {
           </button>
         ))}
       </div>
-      <label className="md:hidden">
+      <label className="lg:hidden">
         <span className="sr-only">Mission mode</span>
         <select
           value={mode}
           onChange={(e) => setMode(e.target.value as MissionMode)}
-          className="border-border-strong bg-card h-11 rounded-sm border px-2 text-sm"
+          className="border-border-strong bg-card h-11 rounded-sm border px-2 text-sm md:h-9"
         >
           {MISSION_ORDER.map((id) => (
             <option key={id} value={id}>
@@ -154,7 +154,7 @@ function TopBar({ route }: { route: Route }) {
   return (
     <header className="bg-card/95 border-border sticky top-0 z-30 border-b backdrop-blur">
       <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-hidden">
           <span className="lg:hidden">
             <Wordmark className="[&>span:last-child]:hidden min-[400px]:[&>span:last-child]:inline" />
           </span>
