@@ -373,6 +373,66 @@ async function addBodyParts3D(dir) {
       for (let a = 0; a < 3; a++) p = add(p, mul(sf.axes[a], dot(d, bf.axes[a]) * fit[a].k + fit[a].mid))
       hand.set(p, i)
     }
+    /*
+      Then the fingers are matched to the skin fingers. The bone hand is
+      turned within the palm plane around the wrist (-35 to 35 degrees) and
+      its spread fingers are drawn together smoothly toward the tips (0-45 %),
+      and the combination that puts the most finger bone inside the outline
+      of the skin hand (its points projected onto the palm plane, 4 mm grid)
+      wins. Smooth and rigid, so no finger bends or breaks.
+    */
+    {
+      const [u, wv, nv] = sf.axes
+      const top = sf.top
+      const CELL = 0.004
+      const occupied = new Set()
+      const cell = (a, b) => `${Math.floor(a / CELL)},${Math.floor(b / CELL)}`
+      for (let i = 0; i < skinHand.length; i += 3) {
+        const d = sub([skinHand[i], skinHand[i + 1], skinHand[i + 2]], top)
+        const a = dot(d, u)
+        const b = dot(d, wv)
+        for (let da = -2; da <= 2; da++) for (let db = -2; db <= 2; db++) occupied.add(cell(a + da * CELL, b + db * CELL))
+      }
+      const pts = []
+      for (let i = 0; i < hand.length; i += 3) {
+        const d = sub([hand[i], hand[i + 1], hand[i + 2]], top)
+        pts.push([dot(d, u), dot(d, wv), dot(d, nv)])
+      }
+      const L = Math.max(...pts.map((p) => p[0]))
+      const bs = pts.map((p) => p[1])
+      const bMid = (Math.min(...bs) + Math.max(...bs)) / 2
+      const move = (p, th, taper) => {
+        const t = Math.max(0, p[0]) / L
+        const b = bMid + (p[1] - bMid) * (1 - taper * t * t)
+        const c = Math.cos(th)
+        const s = Math.sin(th)
+        return [p[0] * c - b * s, p[0] * s + b * c]
+      }
+      const inside = (th, taper) => {
+        let hit = 0
+        let n = 0
+        for (const p of pts) {
+          if (p[0] < 0.35 * L) continue
+          n++
+          const [a, b] = move(p, th, taper)
+          if (occupied.has(cell(a, b))) hit++
+        }
+        return hit / Math.max(1, n)
+      }
+      const before = inside(0, 0)
+      let best = { th: 0, taper: 0, s: before }
+      for (let deg = -35; deg <= 35; deg += 2.5) {
+        for (const taper of [0, 0.15, 0.3, 0.45]) {
+          const s = inside((deg * Math.PI) / 180, taper)
+          if (s > best.s + 1e-9 || (Math.abs(s - best.s) < 1e-9 && Math.abs(deg) < Math.abs((best.th * 180) / Math.PI))) best = { th: (deg * Math.PI) / 180, taper, s }
+        }
+      }
+      pts.forEach((p, k) => {
+        const [a, b] = move(p, best.th, best.taper)
+        hand.set(add(add(add(top, mul(u, a)), mul(wv, b)), mul(nv, p[2])), k * 3)
+      })
+      console.log(`finger fit ${sign > 0 ? 'left' : 'right'}: turn ${((best.th * 180) / Math.PI).toFixed(1)} deg, taper ${best.taper}, finger bone inside skin ${(before * 100).toFixed(0)} % -> ${(best.s * 100).toFixed(0)} %`)
+    }
     console.log(`hand fit ${sign > 0 ? 'left' : 'right'}: scale ${fit.map((f) => f.k.toFixed(2)).join(' / ')}, skin axis ${sf.axes[0].map((v) => v.toFixed(2)).join(', ')}, bone axis ${bf.axes[0].map((v) => v.toFixed(2)).join(', ')}`)
 
     /* Joints */
