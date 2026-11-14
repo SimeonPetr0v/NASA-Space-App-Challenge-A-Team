@@ -139,8 +139,16 @@
 .earth-pulse { transform-box: fill-box; transform-origin: center; animation: earth-pulse 2.4s var(--ease-out) infinite; }
 @keyframes nebula-drift { 0%, 100% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(-6%, 8%, 0) scale(1.12); } }
 .nebula { animation: nebula-drift 22s ease-in-out infinite; will-change: transform; }
+@keyframes planet-spin { to { transform: translateX(var(--spin)); } }
+.planet-spin { animation: planet-spin var(--spin-dur, 48s) linear infinite; }
+@keyframes ship-bob { 0%, 100% { transform: translateY(-2px); } 50% { transform: translateY(2px); } }
+.ship-bob { animation: ship-bob 4s ease-in-out infinite; }
+@keyframes thruster { 0%, 100% { opacity: 0.95; transform: scaleX(1); } 50% { opacity: 0.6; transform: scaleX(0.75); } }
+.thruster { transform-box: fill-box; transform-origin: right center; animation: thruster 0.18s linear infinite; }
+@keyframes photon-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+.photon-pulse { transform-box: fill-box; transform-origin: center; animation: photon-pulse 1.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .twinkle, .ecg, .signal-flow, .marquee, .orbit-travel, .earth-pulse, .nebula { animation: none; }
+  .twinkle, .ecg, .signal-flow, .marquee, .orbit-travel, .earth-pulse, .nebula, .planet-spin, .ship-bob, .thruster, .photon-pulse { animation: none; }
 }
 
 /* One quiet entrance for view changes */

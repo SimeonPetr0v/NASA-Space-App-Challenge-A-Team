@@ -103,16 +103,15 @@ export function EarthLink() {
           title={`Signal path · ${mission.name}`}
           meta={<span className="num">{delayText(delaySec)} one way · {delayText(delaySec * 2)} round trip</span>}
         />
+        <SignalPath
+          mode={mode}
+          inFlight={inFlight}
+          now={now}
+          lastToEarth={lastArrival(messages, 'to-earth', now)}
+          lastToCrew={lastArrival(messages, 'to-crew', now)}
+        />
         <div className="grid gap-5 p-4 sm:p-5 md:grid-cols-[1fr_auto] md:items-end">
-          <div>
-            <SignalPath
-              inFlight={inFlight}
-              now={now}
-              lastToEarth={lastArrival(messages, 'to-earth', now)}
-              lastToCrew={lastArrival(messages, 'to-crew', now)}
-            />
-            <p className="text-muted-foreground mt-3 text-sm">{mission.context}</p>
-          </div>
+          <p className="text-muted-foreground max-w-prose text-sm">{mission.context}</p>
           <div className="flex flex-wrap items-end gap-4">
             {mission.delayRangeMin && (
               <label className="flex flex-col gap-1 text-xs">
