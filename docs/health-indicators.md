@@ -47,3 +47,27 @@ medical guidance rather than a generic app rule.
 10. U.S. Food and Drug Administration, [Pulse Oximeter Basics](https://www.fda.gov/consumers/consumer-updates/pulse-oximeter-basics).
 11. Mayo Clinic, [Hypoxemia (low blood oxygen)](https://www.mayoclinic.org/symptoms/hypoxemia/basics/definition/sym-20050930).
 12. NASA Human Research Program, [Risk of Reduced Cardiorespiratory and Musculoskeletal Fitness](https://www.nasa.gov/reference/risk-of-reduced-cardiorespiratory-and-musculoskeletal-fitness/).
+
+## Summary: key points and thresholds
+
+Spaceflight can shift body fluids and change cardiovascular function; the ISS
+also experiences about 16 sunrises and sunsets per day, which can disrupt sleep
+timing. Isolation, oxygen risks, and fitness loss are other reasons to monitor
+well-being. Readings should be considered with symptoms and a crew member's
+baseline. Earth reference ranges and the prototype's status bands are not
+spaceflight medical limits; mission medical guidance takes precedence.
+
+| Indicator | General adult or mission reference | Current prototype bands |
+|---|---|---|
+| Blood pressure (mmHg) | AHA: normal <120 and <80; elevated systolic 120–129 with diastolic <80; Stage 1 130–139 systolic or 80–89 diastolic; Stage 2 ≥140 systolic or ≥90 diastolic. Low is generally <90/60. [2][3] | **Normal:** systolic 90–119 and diastolic 60–79. **Caution:** systolic ≥120 or diastolic ≥80, or systolic <90 or diastolic <60. **Danger:** systolic ≥140 or diastolic ≥90. Danger takes precedence over caution. |
+| Resting heart rate (bpm) | Common adult reference: 60–100. [4] | **Normal:** 60–100. **Caution:** 40–59 or 101–130. **Danger:** <40 or >130. |
+| Fasting blood glucose (mg/dL) | ADA fasting plasma glucose: <100 normal, 100–125 prediabetes, ≥126 diabetes diagnostic threshold that generally requires confirmation. Hypoglycemia: <70 Level 1, <54 Level 2. [5][6] | **Normal:** 70–99. **Caution:** 54–69 or 100–250. **Danger:** <54 or >250. The >250 band is a prototype rule, not a threshold established by the cited hypoglycemia table. |
+| Body temperature (°C) | General adult range varies; MedlinePlus gives 36.1–37.2. Temperature >38 °C most often means fever. [7] | **Normal:** 36.1–37.5. **Caution:** 35.5–<36.1 or >37.5–<38.5. **Danger:** <35.5 or ≥38.5. |
+| Sleep (hours per 24 hours) | CDC recommendation: ≥7 hours for adults aged 18–60. ISS sees about 16 sunrises and sunsets each day. [8][9] | **Normal:** ≥7. **Caution:** 5–<7. **Danger:** <5. |
+| Mood (self-rating, 1–5) | No universal clinical threshold for this informal self-rating; it is not a diagnosis. [1] | **Normal:** 4–5. **Caution:** 3. **Danger:** 1–2. |
+| Oxygen saturation, SpO₂ (%) | FDA: 95–100% for most healthy people; readings vary and are estimates. [10] | **Normal:** ≥95%. **Caution:** 91–94%. **Danger:** ≤90%. |
+| Exercise (minutes per day) | NASA reports ISS crews exercise about 90 minutes per day, six to seven days a week, under their mission program. [12] | **Normal:** ≥120 minutes. **Caution:** 60–<120. **Danger:** <60. These bands are not an approved exercise prescription. |
+
+These prototype bands are summaries of the current demo logic, not validated
+clinical cutoffs. A concerning symptom or medical-team instruction should not
+be ignored because a measurement falls in a **normal** band.
