@@ -1,10 +1,11 @@
-import { CameraControls, ContactShadows, Html } from '@react-three/drei'
+import { CameraControls, ContactShadows, Html, useProgress } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import type { BodyRegion, Status } from '@/engine/types'
 import { BodyModel } from './BodyModel'
 import { STATUS_HEX } from './palette'
 import { HOME_VIEW, REGIONS } from './regions'
+import { useBodyModel } from './useBodyModel'
 
 const GLYPH: Record<Status, string> = { normal: '●', caution: '▲', danger: '◆', 'no-data': '○', stale: '○' }
 const WORD: Record<Status, string> = { normal: 'nominal', caution: 'caution', danger: 'act now', 'no-data': 'not measured', stale: 'needs re-measuring' }
@@ -18,36 +19,37 @@ export type Body3DProps = {
 
 const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-export default function Body3D({ theme, statusByRegion, selected, onSelect }: Body3DProps) {
+function Loading() {
+  const { progress } = useProgress()
+  return (
+    <Html center>
+      <p className="text-muted-foreground text-sm whitespace-nowrap">Loading body model… {Math.round(progress)}%</p>
+    </Html>
+  )
+}
+
+function Scene({ theme, statusByRegion, selected, onSelect }: Body3DProps) {
+  const model = useBodyModel()
   const [controls, setControls] = useState<CameraControls | null>(null)
   const [hovered, setHovered] = useState<BodyRegion | null>(null)
   const placed = useRef(false)
 
   useEffect(() => {
-    const c = controls
-    if (!c) return
+    if (!controls) return
     const animate = placed.current && !reducedMotion()
     placed.current = true
-    const region = REGIONS.find((r) => r.id === selected)
-    if (!region) {
-      void c.setLookAt(...HOME_VIEW.position, ...HOME_VIEW.target, animate)
+    if (!selected) {
+      void controls.setLookAt(...HOME_VIEW.position, ...HOME_VIEW.target, animate)
       return
     }
-    const [x, y, z] = region.focusTarget
-    void c.setLookAt(x + region.focusDistance * 0.35, y + region.focusDistance * 0.1, z + region.focusDistance, x, y, z, animate)
-  }, [selected, controls])
+    const { focusTarget: [x, y, z], focusDistance: d } = model.geometry[selected]
+    void controls.setLookAt(x + d * 0.35, y + d * 0.1, z + d, x, y, z, animate)
+  }, [selected, controls, model])
 
   return (
-    <Canvas
-      camera={{ position: HOME_VIEW.position, fov: 35, near: 0.05, far: 50 }}
-      dpr={[1, 2]}
-      aria-label="Interactive 3D body. Use the status markers or the region list to inspect each body system."
-    >
-      <ambientLight intensity={theme === 'night' ? 0.35 : 0.7} />
-      <directionalLight position={[2, 3, 2]} intensity={theme === 'night' ? 0.6 : 1.2} color={theme === 'night' ? '#ffb27a' : '#ffffff'} />
-      <directionalLight position={[-2, 1.5, -2]} intensity={0.4} color={theme === 'night' ? '#ff8a5c' : '#cfe3ff'} />
-
+    <>
       <BodyModel
+        model={model}
         theme={theme}
         statusByRegion={statusByRegion}
         selected={selected}
@@ -61,7 +63,7 @@ export default function Body3D({ theme, statusByRegion, selected, onSelect }: Bo
         const active = selected === r.id
         const hidden = selected !== null && !active
         return (
-          <Html key={r.id} position={r.markerAt} center zIndexRange={[20, 0]} style={{ pointerEvents: hidden ? 'none' : 'auto' }}>
+          <Html key={r.id} position={model.geometry[r.id].markerAt} center zIndexRange={[20, 0]} style={{ pointerEvents: hidden ? 'none' : 'auto' }}>
             <button
               type="button"
               onClick={() => onSelect(active ? null : r.id)}
@@ -79,8 +81,29 @@ export default function Body3D({ theme, statusByRegion, selected, onSelect }: Bo
         )
       })}
 
+      <CameraControls ref={setControls} minDistance={0.25} maxDistance={5} smoothTime={0.35} />
+    </>
+  )
+}
+
+export default function Body3D(props: Body3DProps) {
+  const { theme } = props
+  return (
+    <Canvas
+      camera={{ position: HOME_VIEW.position, fov: 35, near: 0.02, far: 50 }}
+      dpr={[1, 2]}
+      aria-label="Interactive 3D body. Use the status markers or the body systems list to inspect each system."
+    >
+      <ambientLight intensity={theme === 'night' ? 0.35 : 0.75} />
+      <directionalLight position={[2, 3, 2]} intensity={theme === 'night' ? 0.6 : 1.3} color={theme === 'night' ? '#ffb27a' : '#ffffff'} />
+      <directionalLight position={[-2, 1.5, -2]} intensity={0.45} color={theme === 'night' ? '#ff8a5c' : '#cfe3ff'} />
+      <directionalLight position={[0, 1, 3]} intensity={theme === 'night' ? 0.25 : 0.5} />
+
+      <Suspense fallback={<Loading />}>
+        <Scene {...props} />
+      </Suspense>
+
       <ContactShadows position={[0, 0, 0]} opacity={theme === 'night' ? 0.25 : 0.35} scale={2.5} blur={2.4} far={1} />
-      <CameraControls ref={setControls} minDistance={0.3} maxDistance={5} smoothTime={0.35} />
     </Canvas>
   )
 }

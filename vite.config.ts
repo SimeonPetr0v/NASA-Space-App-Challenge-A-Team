@@ -13,7 +13,11 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['favicon.svg', 'models/body.glb'],
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,woff2,glb}'],
+        maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+      },
       manifest: {
         name: 'Astro Health Monitor',
         short_name: 'Astro Health',
