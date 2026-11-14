@@ -315,7 +315,59 @@ async function addBodyParts3D(dir) {
       }
       return out
     }
-    return { arm: apply(armPos), hand: apply(handPos) }
+    /*
+      The hand is fitted as one piece (a single scale + move per axis), not
+      slice by slice, so the fingers keep their shape. Its box is the skin
+      hand found by the slices above, minus a little soft tissue. The forearm
+      is then bent smoothly from the elbow down so its end meets the wrist.
+    */
+    const hb = boundsOf(handPos)
+    const sb = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }
+    for (let k = Math.floor(hb.min[1] * 100) - y0; k <= Math.floor(hb.max[1] * 100) - y0; k++) {
+      const f = flesh[k]
+      if (!f || !Number.isFinite(f.x0)) continue
+      sb.min[0] = Math.min(sb.min[0], f.x0)
+      sb.max[0] = Math.max(sb.max[0], f.x1)
+      sb.min[2] = Math.min(sb.min[2], f.z0)
+      sb.max[2] = Math.max(sb.max[2], f.z1)
+    }
+    const inset = 0.006
+    const target = {
+      min: [sb.min[0] + inset, hb.min[1], sb.min[2] + inset],
+      max: [sb.max[0] - inset, hb.max[1], sb.max[2] - inset],
+    }
+    const hand = mapBounds(handPos, hb, target)
+    /* The skin fingers are held together, the bone fingers spread: draw them in smoothly toward the tips */
+    const FINGER_TAPER = 0.3
+    const handCx = (target.min[0] + target.max[0]) / 2
+    for (let i = 0; i < hand.length; i += 3) {
+      const t = (hb.max[1] - hand[i + 1]) / (hb.max[1] - hb.min[1])
+      hand[i] = handCx + (hand[i] - handCx) * (1 - FINGER_TAPER * t * t)
+    }
+    const arm = apply(armPos)
+    const endCentre = (pos, top) => {
+      const b = boundsOf(pos)
+      const c = [0, 0, 0]
+      let m = 0
+      for (let i = 0; i < pos.length; i += 3) {
+        if (top ? pos[i + 1] < b.max[1] - 0.015 : pos[i + 1] > b.min[1] + 0.015) continue
+        c[0] += pos[i]
+        c[2] += pos[i + 2]
+        m++
+      }
+      return [c[0] / m, 0, c[2] / m]
+    }
+    const wrist = endCentre(hand, true)
+    const forearmEnd = endCentre(arm, false)
+    const armB = boundsOf(arm)
+    const elbow = (armB.min[1] + armB.max[1]) / 2
+    for (let i = 0; i < arm.length; i += 3) {
+      const t = Math.min(1, Math.max(0, (elbow - arm[i + 1]) / (elbow - armB.min[1])))
+      const w = t * t * (3 - 2 * t)
+      arm[i] += (wrist[0] - forearmEnd[0]) * w
+      arm[i + 2] += (wrist[2] - forearmEnd[2]) * w
+    }
+    return { arm, hand }
   }
   const hands = handBoneConcepts(dir)
   for (const side of ["right", "left"]) {
