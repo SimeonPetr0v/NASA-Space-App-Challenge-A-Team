@@ -1,17 +1,20 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { DEMO_HISTORY } from '@/data/demo-readings'
+import { CREW, DEFAULT_CREW, isCrewId, storageKey, type CrewId } from '@/data/crew'
+import { DEMO_HISTORY_BY_CREW } from '@/data/demo-readings'
 import { MISSIONS } from '@/data/missions'
 import { worstStatus } from '@/engine/assess'
 import type { Assessment, LinkMessage, MissionMode, Reading } from '@/engine/types'
 import type { WellbeingCheck } from '@/engine/wellbeing'
-import { loadReadings, saveReading } from '@/store/readings'
-import { loadWellbeing, saveWellbeing } from '@/store/wellbeing'
+import { loadReadings, READINGS_KEY, saveReading } from '@/store/readings'
+import { loadWellbeing, saveWellbeing, WELLBEING_KEY } from '@/store/wellbeing'
 
 /*
   App state kept on the device (localStorage) - no backend (PRODUCT.md).
   Measurements and WHO-5 check-ins are validated and persisted by src/store/*
   (readings.ts, wellbeing.ts); this file keeps UI settings and the Earth link.
-  history = synthetic demo history + the crew member's saved readings.
+  history = synthetic demo history + the selected crew member's saved readings.
+  Each crew member (src/data/crew.ts) has separate storage keys; link messages
+  carry the crewId so the flight surgeon inbox shows the whole crew.
   The simulated clock lets the demo speed up light-time delay (x60 / x600);
   the UI must label sped-up time as simulated.
 */
@@ -19,6 +22,7 @@ import { loadWellbeing, saveWellbeing } from '@/store/wellbeing'
 type Clock = { real: number; sim: number; speed: number }
 
 type Persisted = {
+  crewId: CrewId
   mode: MissionMode
   marsDelayMin: number
   theme: 'day' | 'night'
@@ -29,6 +33,7 @@ type Persisted = {
 const KEY = 'ahm:settings-v1'
 
 const DEFAULTS: Persisted = {
+  crewId: DEFAULT_CREW,
   mode: 'mars-transit',
   marsDelayMin: 14,
   theme: 'day',
@@ -41,7 +46,8 @@ function load(): Persisted {
     const raw = localStorage.getItem(KEY)
     if (!raw) return DEFAULTS
     const parsed = JSON.parse(raw) as Partial<Persisted>
-    return { ...DEFAULTS, ...parsed }
+    const merged = { ...DEFAULTS, ...parsed }
+    return isCrewId(merged.crewId) ? merged : { ...merged, crewId: DEFAULT_CREW }
   } catch {
     return DEFAULTS
   }
@@ -51,15 +57,15 @@ export type Transmission = { id: string; title: string; detail: string; delaySec
 
 type Saved = { readings: Reading[]; checks: WellbeingCheck[]; error: string }
 
-function loadSaved(): Saved {
+export function loadSaved(crewId: CrewId): Saved {
   const out: Saved = { readings: [], checks: [], error: '' }
   try {
-    out.readings = loadReadings(window.localStorage)
+    out.readings = loadReadings(window.localStorage, storageKey(READINGS_KEY, crewId))
   } catch {
     out.error = 'Saved measurements could not be loaded. Existing data has not been overwritten; check browser storage and reload.'
   }
   try {
-    out.checks = loadWellbeing(window.localStorage)
+    out.checks = loadWellbeing(window.localStorage, storageKey(WELLBEING_KEY, crewId))
   } catch {
     out.error ||= 'Saved well-being check-ins could not be loaded. Existing answers have not been overwritten.'
   }
@@ -79,6 +85,7 @@ type Store = Persisted & {
   simNow: () => number
   delaySec: number
   addReadings: (readings: Reading[]) => boolean
+  setCrew: (crewId: CrewId) => void
   setMode: (mode: MissionMode) => void
   setMarsDelayMin: (min: number) => void
   setTheme: (theme: 'day' | 'night') => void
@@ -95,8 +102,8 @@ const uid = () => Math.random().toString(36).slice(2, 10)
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<Persisted>(load)
-  const [saved, setSaved] = useState<Saved>(loadSaved)
-  const history = useMemo(() => [...DEMO_HISTORY, ...saved.readings], [saved.readings])
+  const [saved, setSaved] = useState<Saved>(() => loadSaved(state.crewId))
+  const history = useMemo(() => [...DEMO_HISTORY_BY_CREW[state.crewId], ...saved.readings], [state.crewId, saved.readings])
   const [transmission, setTransmission] = useState<Transmission | null>(null)
   const [clock, setClock] = useState<Clock>(() => ({ real: Date.now(), sim: Date.now(), speed: 1 }))
 
@@ -122,7 +129,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       storageError: saved.error,
       addWellbeing: (check) => {
         try {
-          const checks = saveWellbeing(window.localStorage, saved.checks, check)
+          const checks = saveWellbeing(window.localStorage, saved.checks, check, storageKey(WELLBEING_KEY, state.crewId))
           setSaved((s) => ({ ...s, checks, error: '' }))
           return true
         } catch {
@@ -138,13 +145,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       addReadings: (readings) => {
         try {
           let next = saved.readings
-          for (const r of readings) next = saveReading(window.localStorage, next, r)
+          for (const r of readings) next = saveReading(window.localStorage, next, r, storageKey(READINGS_KEY, state.crewId))
           setSaved((s) => ({ ...s, readings: next, error: '' }))
           return true
         } catch (e) {
           setSaved((s) => ({ ...s, error: e instanceof Error ? e.message : 'Measurement could not be saved. Browser storage may be full or unavailable.' }))
           return false
         }
+      },
+      setCrew: (crewId) => {
+        setState((s) => ({ ...s, crewId }))
+        setSaved(loadSaved(crewId))
       },
       setMode: (mode) => setState((s) => ({ ...s, mode })),
       setMarsDelayMin: (marsDelayMin) => setState((s) => ({ ...s, marsDelayMin })),
@@ -161,11 +172,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           kind: 'report',
           createdAt: new Date(created).toISOString(),
           arrivesAt: new Date(created + delaySec * 1000).toISOString(),
-          payload: { assessments, readings, note },
+          payload: { assessments, readings, note, crewId: state.crewId },
         }
         setState((s) => ({ ...s, messages: [...s.messages, msg] }))
         const worst = worstStatus(assessments)
-        setTransmission({ id: msg.id, title: note, detail: `${readings.length} readings, ${assessments.filter((a) => a.status === 'caution' || a.status === 'danger').length} off-nominal · from crew member CM-2`, delaySec, worst })
+        setTransmission({ id: msg.id, title: note, detail: `${readings.length} readings, ${assessments.filter((a) => a.status === 'caution' || a.status === 'danger').length} off-nominal · from ${CREW[state.crewId].callsign}`, delaySec, worst })
         return msg
       },
       sendReply: (report, template) => {
@@ -176,13 +187,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           kind: 'reply',
           createdAt: new Date(created).toISOString(),
           arrivesAt: new Date(created + delaySec * 1000).toISOString(),
-          payload: { replyTemplate: template, inReplyTo: report.id },
+          payload: { replyTemplate: template, inReplyTo: report.id, crewId: report.payload.crewId ?? DEFAULT_CREW },
         }
         setState((s) => ({ ...s, messages: [...s.messages, msg] }))
       },
       logWaking: (reason) => setState((s) => ({ ...s, wakings: [...s.wakings, `${new Date(simNow()).toISOString()}|${reason}`] })),
       resetDemo: () => {
-        setState(DEFAULTS)
+        setState({ ...DEFAULTS, crewId: state.crewId })
         setClock({ real: Date.now(), sim: Date.now(), speed: 1 })
       },
     }),

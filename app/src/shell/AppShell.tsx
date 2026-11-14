@@ -1,5 +1,7 @@
 import { BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Moon, RadioTower, Rocket } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { CrewSwitcher } from '@/components/CrewSwitcher'
+import { CREW } from '@/data/crew'
 import { DEMO_TODAY } from '@/data/demo-readings'
 import { MISSION_DAY_TODAY, MISSION_ORDER, MISSIONS } from '@/data/missions'
 import type { MissionMode } from '@/engine/types'
@@ -45,7 +47,7 @@ export function Wordmark({ className }: { className?: string }) {
 }
 
 function SideNav({ route }: { route: Route }) {
-  const { mode, delaySec } = useStore()
+  const { mode, delaySec, crewId } = useStore()
   const m = MISSIONS[mode]
   return (
     <aside className="bg-chrome text-chrome-foreground sticky top-0 hidden h-svh w-60 shrink-0 flex-col lg:flex">
@@ -79,7 +81,9 @@ function SideNav({ route }: { route: Route }) {
           <dt className="text-chrome-muted">Signal delay</dt>
           <dd className="num text-right">{delayText(delaySec)} one way</dd>
           <dt className="text-chrome-muted">Crew member</dt>
-          <dd className="text-right">CM-2 (synthetic)</dd>
+          <dd className="text-right">{CREW[crewId].callsign} (synthetic)</dd>
+          <dt className="text-chrome-muted">Role</dt>
+          <dd className="text-right">{CREW[crewId].role}</dd>
         </dl>
         <p className="text-chrome-muted mt-5 leading-relaxed">Demo data. Supports self-assessment only; does not diagnose.</p>
       </div>
@@ -166,6 +170,7 @@ function TopBar({ route }: { route: Route }) {
             </div>
           )}
         </dl>
+        <CrewSwitcher />
         <MissionSwitcher />
         <button
           type="button"
@@ -183,7 +188,7 @@ function TopBar({ route }: { route: Route }) {
 
 function MobileNav({ route }: { route: Route }) {
   return (
-    <nav aria-label="Main" className="bg-card border-border fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t pb-[env(safe-area-inset-bottom)] lg:hidden">
+    <nav aria-label="Main" className="bg-card border-border fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t pb-[env(safe-area-inset-bottom)] lg:hidden">
       {NAV.map(({ route: r, label, icon: Icon }) => (
         <a
           key={r}

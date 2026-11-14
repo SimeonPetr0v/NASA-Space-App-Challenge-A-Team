@@ -5,6 +5,7 @@ import { EASE_OUT } from '@/components/motion-config'
 import { StatusGlyph } from '@/components/StatusBadge'
 import { STATUS_META } from '@/components/status-meta'
 import { INDICATOR_ORDER } from '@/data/indicators'
+import { CREW } from '@/data/crew'
 import { MISSION_DAY_TODAY, MISSIONS } from '@/data/missions'
 import { cn } from '@/lib/utils'
 import { href } from '@/state/route'
@@ -30,7 +31,7 @@ const TAGLINE: Record<string, string> = {
 }
 
 export function SpaceHero() {
-  const { mode, delaySec } = useStore()
+  const { mode, delaySec, crewId } = useStore()
   const { summary, assessments } = useHealth()
   const meta = STATUS_META[summary.overall]
   const off = summary.counts.caution + summary.counts.danger
@@ -111,7 +112,7 @@ export function SpaceHero() {
           transition={{ duration: 0.6, ease: EASE_OUT }}
           className="label text-space-muted"
         >
-          Mission day {MISSION_DAY_TODAY} · {MISSIONS[mode].name} · Crew member CM-2
+          Mission day {MISSION_DAY_TODAY} · {MISSIONS[mode].name} · Crew member {CREW[crewId].callsign}
         </motion.p>
         <h1 id="hero-title" className="mt-4 max-w-4xl text-4xl leading-[1.05] tracking-tight uppercase sm:text-6xl">
           <motion.span

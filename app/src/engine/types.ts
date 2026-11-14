@@ -72,5 +72,7 @@ export type LinkMessage = {
     note?: string
     replyTemplate?: string
     inReplyTo?: string
+    /** Sender (report) or addressee (reply); missing on messages saved before crew support = CM-2 */
+    crewId?: 'cm1' | 'cm2' | 'cm3'
   }
 }
