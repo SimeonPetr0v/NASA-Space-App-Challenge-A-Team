@@ -1,6 +1,8 @@
 import { Moon } from 'lucide-react'
 import { PageBanner } from '@/components/PageBanner'
+import { AnimatePresence, motion } from 'motion/react'
 import { useState } from 'react'
+import { EASE_OUT } from '@/components/motion-config'
 import { StatusGlyph } from '@/components/StatusBadge'
 import { STATUS_META } from '@/components/status-meta'
 import { Action } from '@/components/ui/action'
@@ -10,6 +12,13 @@ import type { Reading } from '@/engine/types'
 import { delayText, utcTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useSimNow, useStore } from '@/state/store'
+
+const PANEL_MOTION = {
+  initial: { opacity: 0, y: -6 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -6 },
+  transition: { duration: 0.22, ease: EASE_OUT },
+} as const
 import { useHealth } from '@/state/useHealth'
 
 /*
@@ -102,7 +111,9 @@ export function NightView() {
           </p>
         )}
 
+        <AnimatePresence mode="wait" initial={false}>
         {panel === 'waking' && (
+          <motion.div key="waking" {...PANEL_MOTION}>
           <section aria-label="Why did you wake up?" className="grid gap-3">
             <p className="text-muted-foreground text-sm">Why did you wake up? {wakings.length > 0 && <span className="num">({wakings.length} logged)</span>}</p>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -120,9 +131,11 @@ export function NightView() {
               ))}
             </div>
           </section>
+          </motion.div>
         )}
 
         {panel === 'vitals' && (
+          <motion.div key="vitals" {...PANEL_MOTION}>
           <form
             className="grid gap-4"
             onSubmit={(e) => {
@@ -170,9 +183,11 @@ export function NightView() {
               </Action>
             </div>
           </form>
+          </motion.div>
         )}
 
         {panel === 'unwell' && (
+          <motion.div key="unwell" {...PANEL_MOTION}>
           <section aria-label="Feeling unwell" className="grid gap-3 text-base">
             <ol className="grid gap-2">
               <li>1. Sit or lie down and stay where you are.</li>
@@ -193,7 +208,9 @@ export function NightView() {
               </Action>
             </div>
           </section>
+          </motion.div>
         )}
+        </AnimatePresence>
         {theme === 'day' && (
           <Action variant="secondary" onClick={() => setTheme('night')}>
             <Moon aria-hidden="true" /> Turn on night colours
