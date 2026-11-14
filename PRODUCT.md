@@ -29,7 +29,9 @@ Two committed differentiators:
 1. **Mission mode.** The same astronaut is assessed differently on the ISS, in lunar operations, in Mars transit and on Mars: gravity changes exercise targets and orthostatic risk, the radiation budget changes, and the communication delay to Earth (seconds near Earth, ~4–22 min one way at Mars) changes escalation. Far from Earth the app has to tell the astronaut what to do while the message to the flight surgeon is still travelling.
 2. **Interactive body figure.** NASA's own suggested interaction, made central: body regions (brain/mood and sleep, eyes, heart, lungs, bones and muscles, immune/temperature, whole-body radiation) are selectable and carry their status, and each opens the indicator's value, trend, the spaceflight hazard behind it, how to measure it and what to do.
 
-Considered but not committed: personal-baseline drift alerts and a sleep-shift night mode. They may be added if time allows; do not present them as core.
+3. **Sleep-shift night mode** (committed 2026-11-14). A circadian countermeasure, not a dark theme: during the crew sleep window the app drops blue light and shows only status, one action and quick night actions; danger alerts still escalate. Plan: `docs/night-mode.md`.
+
+Considered but not committed: personal-baseline drift alerts. May be added if time allows; do not present it as core.
 
 ## Operating Context
 
@@ -41,7 +43,7 @@ Considered but not committed: personal-baseline drift alerts and a sleep-shift n
 ## Capabilities and Constraints
 
 - Required core: data input (keyboard/clicks, optionally camera or file); assessment against ranges → normal / caution / danger; at-a-glance visual status; guidance and escalation for every non-normal state.
-- Planned beyond core: mission mode, interactive body figure, charts over time, measurement reminders. Optional if time allows: gamification (streaks, original mission-patch style badges, no crew leaderboards), personal baseline, night mode.
+- Planned beyond core: mission mode, interactive body figure, charts over time, measurement reminders. Also committed: sleep-shift night mode. Optional if time allows: gamification (streaks, original mission-patch style badges, no crew leaderboards), personal baseline.
 - Thresholds and guidance live in one data file with a source URL per row (see `.claude/skills/astro-health-science`). They are self-assessment defaults, not medical criteria; the science owner verifies them.
 - Language: "outside the usual range", "consider", "contact flight surgeon"; never "you have X". A visible disclaimer states the app does not diagnose.
 - No NASA logos, insignia or mission identifiers. AI-generated images carry a visible watermark. No imagery or voices of people under 18.

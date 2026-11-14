@@ -24,6 +24,11 @@ A visual self-assessment tool: astronaut logs health indicators → engine compa
 ### Precedence when skills disagree
 Our own `astro-ui-design` (status = colour + shape + word, accessibility, tokens) and `astro-health-science` win over the general design skills. The general skills decide craft: typography, spacing, motion curves, polish.
 
+### UI libraries (decided 2026-11-14)
+- Animation: **Motion** (`motion/react`) for UI transitions — matches the Emil Kowalski skills. **GSAP** only if the body-figure SVG needs path drawing/morphing; never both for the same element.
+- **No Lenis / scroll-jacking** in the app — it is a dashboard, and smooth-scroll libraries hurt accessibility. Allowed only on the showcase page.
+- **React Bits** and **21st.dev**: reference and copy single components only; restyle them with our tokens, check the licence of each, and add every copied component to `docs/references.md`. No flashy effects on health screens.
+
 ### Figma
 `.mcp.json` registers the official Figma MCP server (`https://mcp.figma.com/mcp`). Each teammate authorizes it once with their own Figma account (`/mcp` in Claude Code). Use it to pull frames, tokens and components from our Figma file into code.
 
