@@ -40,12 +40,15 @@ export function useBodyModel(): BodyModelData {
     const geometry = {} as Record<BodyRegion, RegionGeometry>
     for (const meta of REGIONS) {
       const box = new THREE.Box3()
-      for (const mesh of meshesByRegion[meta.id]) box.expandByObject(mesh)
+      /* Markers and zoom use the region's main organ (e.g. the spleen for immune), not every part in the system */
+      const meshes = meshesByRegion[meta.id]
+      const anchor = meshes.filter((m) => m.userData.tissue === `${meta.id}:base`)
+      for (const mesh of anchor.length ? anchor : meshes) box.expandByObject(mesh)
       const center = box.getCenter(new THREE.Vector3())
       const size = box.getSize(new THREE.Vector3())
       const isWholeBody = meta.id === 'whole-body'
       const markerY = isWholeBody ? 0.95 : meta.id === 'musculoskeletal' ? 0.55 : center.y
-      const markerX = isWholeBody ? meta.markerSide * 0.32 : center.x + meta.markerSide * (size.x / 2 + 0.07)
+      const markerX = isWholeBody ? meta.markerSide * 0.32 : meta.id === 'musculoskeletal' ? meta.markerSide * 0.11 : center.x + meta.markerSide * (size.x / 2 + 0.07)
       geometry[meta.id] = {
         center: center.toArray() as Vec3,
         size: size.toArray() as Vec3,

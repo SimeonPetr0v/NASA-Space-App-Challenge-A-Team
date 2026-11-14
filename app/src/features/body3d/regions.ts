@@ -46,9 +46,9 @@ export const REGIONS: RegionMeta[] = [
   },
   {
     id: 'immune',
-    short: 'Immune',
-    label: 'Immune system · temperature',
-    summary: 'Stress and radiation weaken immunity; fever is the first sign of infection.',
+    short: 'Spleen · immune',
+    label: 'Immune system · spleen, thymus, lymph nodes · temperature',
+    summary: 'Stress and radiation weaken immunity; fever is the first sign of infection. The marker points at the spleen.',
     markerSide: 1,
   },
   {
@@ -61,8 +61,8 @@ export const REGIONS: RegionMeta[] = [
   {
     id: 'whole-body',
     short: 'Metabolism',
-    label: 'Whole body · metabolism',
-    summary: 'Limited food, stress and inactivity change blood sugar and body mass.',
+    label: 'Whole body · metabolism (liver, pancreas, gut, kidneys)',
+    summary: 'Limited food, stress and inactivity change blood sugar and body mass. Fluid shifts change how the kidneys work.',
     markerSide: -1,
   },
 ]
