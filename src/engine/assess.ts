@@ -1,3 +1,4 @@
+import { readingError } from './validate'
 import { INDICATORS } from '@/data/indicators'
 import type { Assessment, Reading, Status } from '@/engine/types'
 
@@ -11,16 +12,18 @@ const SEVERITY: Record<Status, number> = { normal: 0, 'no-data': 1, stale: 1, ca
 
 export function assess(reading: Reading): Assessment {
   const def = INDICATORS[reading.indicatorId]
-  const status = def.classify(reading.value)
+  const error = readingError(reading)
+  const status = error ? 'no-data' : def.classify(reading.value)
   return {
     indicatorId: reading.indicatorId,
     status,
-    reason: `${def.label} is ${status}`,
+    reason: error ?? `${def.label} is ${status}`,
     sourceUrl: def.sourceUrl,
   }
 }
 
 export function worstStatus(assessments: Assessment[]): Status {
+  if (!assessments.length) return 'no-data'
   return assessments.reduce<Status>(
     (worst, a) => (SEVERITY[a.status] > SEVERITY[worst] ? a.status : worst),
     'normal',
