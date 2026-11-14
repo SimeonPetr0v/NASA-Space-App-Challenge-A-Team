@@ -1,7 +1,8 @@
 {
   "recommendations": [
     "anthropic.claude-code",
-    "dbaeumer.vscode-eslint",
+    "oxc.oxc-vscode",
+    "bradlc.vscode-tailwindcss",
     "esbenp.prettier-vscode",
     "eamodio.gitlens",
     "github.vscode-pull-request-github",

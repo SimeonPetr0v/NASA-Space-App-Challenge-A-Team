@@ -19,7 +19,16 @@ _Input → assessment (absolute range + personal baseline) → status (normal / 
 - _Add every other source with how we used it._
 
 ## Run locally
-_TBD once the stack is chosen._
+Requires Node 22 (`.nvmrc`).
+
+```bash
+npm install
+npm run dev
+```
+
+Build: `npm run build` · Lint: `npm run lint`. Every push to `main` deploys to GitHub Pages.
+
+Stack: React 19 + Vite + TypeScript, Tailwind CSS v4 + shadcn/ui, Motion, vite-plugin-pwa (installable, offline).
 
 ## Team
 | Name | Role |

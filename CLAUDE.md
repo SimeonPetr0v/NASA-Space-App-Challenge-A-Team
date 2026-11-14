@@ -32,6 +32,12 @@ Our own `astro-ui-design` (status = colour + shape + word, accessibility, tokens
 ### Figma
 `.mcp.json` registers the official Figma MCP server (`https://mcp.figma.com/mcp`). Each teammate authorizes it once with their own Figma account (`/mcp` in Claude Code). Use it to pull frames, tokens and components from our Figma file into code.
 
+## Stack and commands
+React 19 + Vite + TypeScript (Node 22), Tailwind CSS v4 + shadcn/ui, Motion, vite-plugin-pwa. `npm run dev` · `npm run build` · `npm run lint` (oxlint). Imports use `@/` for `src/`.
+- Shared contract: `src/engine/types.ts`. Thresholds: `src/data/indicators.ts`. Tokens: `src/styles/tokens.css` (status colours, night theme via `<html data-theme="night">`).
+- Add shadcn components with `npx shadcn@latest add <name>`; 21st.dev components with `npx shadcn@latest add "<21st.dev /r/ link>"` (free plan: 2 per day per account).
+- Push to `main` deploys to GitHub Pages (`.github/workflows/deploy.yml`).
+
 ## Working rules
 - Thresholds and guidance text live only in the data file (`src/data/indicators.*`), each with a `sourceUrl`.
 - Components use design tokens only (`src/styles/tokens.css`).

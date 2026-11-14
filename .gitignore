@@ -12,3 +12,8 @@ Thumbs.db
 !.vscode/settings.json
 __pycache__/
 .claude/settings.local.json
+
+# Build & local tooling
+*.local
+.taste-skill/
+.impeccable/config.local.json
