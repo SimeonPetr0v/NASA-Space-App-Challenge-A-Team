@@ -1,5 +1,5 @@
 import { AnimatePresence, MotionConfig, motion } from 'motion/react'
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { TransmitOverlay } from '@/components/TransmitOverlay'
 import { AppShell } from '@/shell/AppShell'
 import { useRoute } from '@/state/route'
@@ -15,6 +15,8 @@ import { DemoPlayer } from '@/features/demo/DemoPlayer'
 import { SolarNav } from '@/features/solar-nav/SolarNav'
 import { Overview } from '@/views/Overview'
 import { Trends } from '@/views/Trends'
+
+const TotPage = lazy(() => import('@/features/tot/TotPage').then((m) => ({ default: m.TotPage })))
 
 function Screens() {
   const { route, param } = useRoute()
@@ -44,6 +46,13 @@ function Screens() {
                   {route === 'brief' && <Brief />}
                   {route === 'sleep' && <NightView />}
                   {route === 'crew' && (FEATURES.crewBoard ? <CrewBoard /> : <Overview />)}
+                  {route === 'tot' && (FEATURES.tot ? (
+                    <Suspense fallback={<p className="text-muted-foreground p-8 text-sm">Loading TOT…</p>}>
+                      <TotPage />
+                    </Suspense>
+                  ) : (
+                    <Overview />
+                  ))}
                 </motion.div>
               </AnimatePresence>
       </AppShell>

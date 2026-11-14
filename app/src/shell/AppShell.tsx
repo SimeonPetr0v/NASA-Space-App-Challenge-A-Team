@@ -1,4 +1,4 @@
-import { Users, BedDouble, BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Moon, RadioTower, Rocket, Sun } from 'lucide-react'
+import { Sparkles, Users, BedDouble, BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Moon, RadioTower, Rocket, Sun } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { CrewSwitcher } from '@/components/CrewSwitcher'
 import { FEATURES } from '@/config/features'
@@ -16,6 +16,7 @@ const NAV: { route: Route; label: string; icon: typeof LayoutDashboard }[] = [
   { route: 'overview', label: 'Overview', icon: LayoutDashboard },
   { route: 'log', label: 'Log reading', icon: ClipboardPlus },
   { route: 'trends', label: 'Trends', icon: ChartLine },
+  ...(FEATURES.tot ? [{ route: 'tot' as Route, label: 'Ask TOT', icon: Sparkles }] : []),
   { route: 'link', label: 'Earth link', icon: RadioTower },
   { route: 'method', label: 'Methodology', icon: BookOpen },
   { route: 'brief', label: 'Mission brief', icon: Rocket },
@@ -203,7 +204,7 @@ function TopBar({ route }: { route: Route }) {
   )
 }
 
-const SHORT: Record<string, string> = { 'Log reading': 'Log', Methodology: 'Method', 'Mission brief': 'Brief', 'Sleep shift': 'Sleep' }
+const SHORT: Record<string, string> = { 'Ask TOT': 'TOT', 'Log reading': 'Log', Methodology: 'Method', 'Mission brief': 'Brief', 'Sleep shift': 'Sleep' }
 const TIGHT: Record<string, string> = { Overview: 'Home', 'Earth link': 'Link' }
 const shortLabel = (label: string, tight: boolean) => (tight && TIGHT[label]) || SHORT[label] || label
 

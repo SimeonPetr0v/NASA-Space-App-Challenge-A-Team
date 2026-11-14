@@ -23,5 +23,5 @@ export const FEATURES = {
   /** Sun at the right edge that opens the pages as orbiting planets (src/features/solar-nav) */
   solarNav: true,
   /** TOT, the on-device AI assistant (WebLLM, no cloud) (src/features/tot) */
-  tot: false,
+  tot: true,
 } as const
