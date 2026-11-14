@@ -115,7 +115,7 @@ export function EarthLink() {
           lastToEarth={lastArrival(messages, 'to-earth', now)}
           lastToCrew={lastArrival(messages, 'to-crew', now)}
         />
-        <div className="grid gap-5 p-4 sm:p-5 md:grid-cols-[1fr_auto] md:items-end">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-5 p-4 sm:p-5 md:grid-cols-[1fr_auto] md:items-end">
           <p className="text-muted-foreground max-w-prose text-sm">{mission.context}</p>
           <div className="flex flex-wrap items-end gap-4">
             {mission.delayRangeMin && (
@@ -159,7 +159,7 @@ export function EarthLink() {
         )}
       </Panel>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
         <Panel aria-labelledby="crew-title">
           <PanelHeader id="crew-title" title="Crew side" meta={`${CREW[crewId].callsign} (synthetic) · guidance is shown immediately`} />
           <div className="border-border flex flex-wrap gap-2 border-b p-4 sm:p-5">

@@ -20,4 +20,8 @@ export const FEATURES = {
   bodyTimeline: true,
   /** Heart rate estimate from the phone camera, PPG (src/features/camera-pulse) */
   cameraPulse: true,
+  /** Sun at the right edge that opens the pages as orbiting planets (src/features/solar-nav) */
+  solarNav: true,
+  /** TOT, the on-device AI assistant (WebLLM, no cloud) (src/features/tot) */
+  tot: false,
 } as const

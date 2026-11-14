@@ -1,4 +1,4 @@
-# [Project name] — Astronaut Health Monitor
+# Khonsu — Astronaut Health Monitor
 
 > NASA Space Apps Challenge 2026 · Challenge: *Create Health Monitoring Software for Astronauts on Space Missions*
 

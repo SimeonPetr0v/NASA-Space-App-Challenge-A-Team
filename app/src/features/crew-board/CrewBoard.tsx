@@ -52,7 +52,7 @@ export function CrewBoard() {
         Everyone on board at a glance, worst first. Open a crew member to see their readings and guidance.
       </PageBanner>
       <Page>
-        <motion.ul variants={staggerParent} initial="hidden" animate="show" className="grid gap-4 md:grid-cols-3">
+        <motion.ul variants={staggerParent} initial="hidden" animate="show" className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-3">
           {order.map((id) => {
             const { summary, readings } = health[id]
             const meta = STATUS_META[summary.overall]

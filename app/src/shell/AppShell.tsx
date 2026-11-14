@@ -34,6 +34,7 @@ const TITLES: Record<Route, string> = {
   brief: 'Mission brief',
   sleep: 'Sleep shift',
   crew: 'Crew board',
+  tot: 'TOT assistant',
 }
 
 /* Mission elapsed time: day 1 started at 00:00 UTC, MISSION_DAY_TODAY - 1 days before the demo morning check */
@@ -49,7 +50,7 @@ export function Wordmark({ className }: { className?: string }) {
       <svg viewBox="0 0 24 24" className="size-5 shrink-0" aria-hidden="true">
         <path d="M2 13h5l2-6 3.5 11 2.5-8 1.5 3H22" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="square" strokeLinejoin="miter" />
       </svg>
-      <span className="text-[0.9375rem] leading-none font-semibold tracking-tight whitespace-nowrap">Astro Health Monitor</span>
+      <span className="text-[0.9375rem] leading-none font-semibold tracking-tight whitespace-nowrap">Khonsu</span>
     </span>
   )
 }
@@ -152,11 +153,11 @@ function TopBar({ route }: { route: Route }) {
   const m = (met % 3_600_000) / 60_000
   const s = (met % 60_000) / 1000
   return (
-    <header className="bg-card/95 border-border sticky top-0 z-30 border-b backdrop-blur">
-      <div className="flex h-14 items-center gap-3 px-4 sm:px-6">
+    <header className="bg-card/95 border-border relative z-30 border-b backdrop-blur sm:sticky sm:top-0">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 sm:h-14 sm:flex-nowrap sm:px-6 sm:py-0">
         <div className="min-w-0 flex-1 overflow-hidden">
           <span className="lg:hidden">
-            <Wordmark className="[&>span:last-child]:hidden min-[400px]:[&>span:last-child]:inline" />
+            <Wordmark />
           </span>
           <p className="hidden text-sm lg:block">
             <span className="text-muted-foreground">Crew health</span>
@@ -182,9 +183,11 @@ function TopBar({ route }: { route: Route }) {
             </div>
           )}
         </dl>
-        {FEATURES.playDemo && <PlayDemoButton className="hidden sm:flex" />}
-        <CrewSwitcher />
-        <MissionSwitcher />
+        {FEATURES.playDemo && <PlayDemoButton className="h-11 md:h-9" />}
+        <div className="order-last flex w-full items-center gap-2 sm:order-none sm:w-auto sm:gap-3 [&>label]:min-w-0 [&>label]:flex-1 sm:[&>label]:flex-none [&_select]:w-full sm:[&_select]:w-auto">
+          <CrewSwitcher />
+          <MissionSwitcher />
+        </div>
         <button
           type="button"
           onClick={() => setTheme(night ? 'day' : 'night')}

@@ -303,7 +303,7 @@ export function Overview() {
         <StatusSummary />
       </section>
       {(FEATURES.trendWarnings || FEATURES.radiation) && (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
           {FEATURES.trendWarnings && <TrendWatch />}
           {FEATURES.radiation && <RadiationBudget />}
         </div>

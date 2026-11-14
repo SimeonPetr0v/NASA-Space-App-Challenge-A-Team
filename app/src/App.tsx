@@ -12,6 +12,7 @@ import { NightView } from '@/views/NightView'
 import { FEATURES } from '@/config/features'
 import { CrewBoard } from '@/features/crew-board/CrewBoard'
 import { DemoPlayer } from '@/features/demo/DemoPlayer'
+import { SolarNav } from '@/features/solar-nav/SolarNav'
 import { Overview } from '@/views/Overview'
 import { Trends } from '@/views/Trends'
 
@@ -48,6 +49,7 @@ function Screens() {
       </AppShell>
       <TransmitOverlay />
       {FEATURES.playDemo && <DemoPlayer />}
+      {FEATURES.solarNav && <SolarNav route={route} />}
     </>
   )
 }

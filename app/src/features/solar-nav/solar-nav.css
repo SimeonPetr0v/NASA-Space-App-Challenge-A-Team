@@ -1,0 +1,298 @@
+/*
+  Solar section menu (features.solarNav). Plain CSS: every step of the open
+  and close sequence is a transition whose delay depends on the state, so
+  the order (planets emerge, then turn into icons; icons fade, then planets
+  fold back into the sun) needs no animation library.
+*/
+
+.solar {
+  --sun: 132px;
+  --radius: 190px;
+  --planet: 44px;
+  --step-in: 70ms;
+  --step-out: 55ms;
+  --emerge: 420ms;
+  --ease: cubic-bezier(0.23, 1, 0.32, 1);
+  position: fixed;
+  top: 50%;
+  right: 0;
+  z-index: 40;
+  width: calc(var(--radius) + var(--planet) + 40px);
+  height: calc(var(--radius) * 2 + var(--planet) + 40px);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+@media (max-width: 1023px) {
+  .solar {
+    --sun: 96px;
+    --radius: 150px;
+    --planet: 40px;
+  }
+}
+
+@media (max-width: 639px) {
+  .solar {
+    --sun: 64px;
+    --radius: 136px;
+    --planet: 40px;
+  }
+}
+
+/* The sun: half off-screen at the right edge; its hit area reaches further out so "approaching" opens it */
+.solar-sun {
+  position: absolute;
+  top: 50%;
+  right: calc(var(--sun) / -2);
+  width: var(--sun);
+  height: var(--sun);
+  margin-top: calc(var(--sun) / -2);
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  background: radial-gradient(circle at 38% 40%, #fff7d6 0%, #ffd45a 28%, #ff9f1c 62%, #e8590c 100%);
+  box-shadow:
+    0 0 24px 6px rgb(255 170 40 / 0.55),
+    0 0 70px 18px rgb(255 140 20 / 0.28);
+  transition:
+    opacity 380ms var(--ease) var(--sun-delay, 0ms),
+    box-shadow 380ms var(--ease) var(--sun-delay, 0ms),
+    filter 380ms var(--ease) var(--sun-delay, 0ms);
+}
+
+.solar-sun::before {
+  content: '';
+  position: absolute;
+  inset: -22px;
+  border-radius: 50%;
+}
+
+.solar-sun::after {
+  content: '';
+  position: absolute;
+  inset: -10px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(255 190 60 / 0.35) 40%, transparent 70%);
+  animation: solar-corona 5s ease-in-out infinite;
+  transition: opacity 380ms var(--ease) var(--sun-delay, 0ms);
+}
+
+@keyframes solar-corona {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+}
+
+.solar-sun:focus-visible {
+  outline: 3px solid var(--ring, #4c8dff);
+  outline-offset: 6px;
+}
+
+.solar[data-open='true'] .solar-sun {
+  opacity: 0.6;
+  filter: saturate(0.75);
+  box-shadow:
+    0 0 10px 2px rgb(255 170 40 / 0.3),
+    0 0 26px 6px rgb(255 140 20 / 0.12);
+}
+
+.solar[data-open='true'] .solar-sun::after {
+  opacity: 0.3;
+}
+
+/* Restore the glow only after the planets have folded back */
+.solar[data-open='false'] {
+  --sun-delay: calc(var(--n) * var(--step-out) + 260ms);
+}
+
+.solar-list {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Every planet starts inside the sun and travels out to its place on the arc */
+.solar-item {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: var(--planet);
+  height: var(--planet);
+  margin-top: calc(var(--planet) / -2);
+  margin-right: calc(var(--planet) / -2);
+  opacity: 0;
+  transform: translate(0, 0) scale(0.2);
+  transition:
+    transform var(--emerge) var(--ease),
+    opacity 260ms var(--ease);
+  transition-delay: calc((var(--n) - 1 - var(--i)) * var(--step-out) + 140ms);
+  visibility: hidden;
+}
+
+.solar[data-open='true'] .solar-item {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translate(calc(var(--radius) * var(--cx)), calc(var(--radius) * var(--cy))) scale(1);
+  transition-delay: calc(var(--i) * var(--step-in));
+}
+
+.solar[data-open='false'] .solar-item {
+  transition:
+    transform var(--emerge) var(--ease),
+    opacity 260ms var(--ease),
+    visibility 0ms linear calc((var(--n) - 1 - var(--i)) * var(--step-out) + 140ms + var(--emerge));
+  transition-delay: calc((var(--n) - 1 - var(--i)) * var(--step-out) + 140ms);
+}
+
+.solar-link {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  color: var(--foreground);
+  text-decoration: none;
+  outline: none;
+  transition: transform 180ms var(--ease);
+}
+
+.solar-link:hover,
+.solar-link:focus-visible {
+  transform: scale(1.14);
+}
+
+.solar-link:focus-visible {
+  box-shadow: 0 0 0 3px var(--ring, #4c8dff);
+}
+
+/* The planet face and the icon share the circle and crossfade */
+.solar-planet,
+.solar-icon {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  transition: opacity 320ms var(--ease);
+}
+
+.solar-planet {
+  box-shadow: inset -6px -6px 12px rgb(0 0 0 / 0.35), 0 4px 12px rgb(0 0 0 / 0.25);
+}
+
+.solar-icon {
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+}
+
+.solar-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Open: once the last planet is out, each planet turns into its icon in turn */
+.solar[data-open='true'] .solar-icon {
+  opacity: 1;
+  transition-delay: calc(var(--n) * var(--step-in) + var(--emerge) + var(--i) * 60ms);
+}
+
+.solar[data-open='true'] .solar-planet {
+  opacity: 0;
+  transition-delay: calc(var(--n) * var(--step-in) + var(--emerge) + var(--i) * 60ms);
+}
+
+/* Close: icons fade first, planets come back, then fold into the sun */
+.solar[data-open='false'] .solar-icon {
+  opacity: 0;
+  transition-duration: 140ms;
+  transition-delay: 0ms;
+}
+
+.solar[data-open='false'] .solar-planet {
+  opacity: 1;
+  transition-duration: 140ms;
+  transition-delay: 0ms;
+}
+
+.solar-link[aria-current='page'] .solar-icon {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary), 0 6px 18px rgb(0 0 0 / 0.18);
+}
+
+/* Label to the left of the hovered or focused planet */
+.solar-label {
+  position: absolute;
+  right: calc(100% + 10px);
+  top: 50%;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--foreground);
+  color: var(--background);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translate(4px, -50%);
+  transition:
+    opacity 150ms var(--ease),
+    transform 150ms var(--ease);
+  pointer-events: none;
+}
+
+.solar-link:hover .solar-label,
+.solar-link:focus-visible .solar-label {
+  opacity: 1;
+  transform: translate(0, -50%);
+}
+
+/* Planets */
+.planet-mercury { background: radial-gradient(circle at 35% 35%, #d9d4cf, #8e8780 60%, #5d5752); }
+.planet-venus { background: radial-gradient(circle at 35% 35%, #fff1c9, #e7c27d 55%, #b9883e); }
+.planet-earth {
+  background:
+    radial-gradient(circle at 30% 30%, rgb(255 255 255 / 0.5), transparent 30%),
+    radial-gradient(ellipse 40% 30% at 35% 55%, #3f9b52 60%, transparent 62%),
+    radial-gradient(ellipse 30% 25% at 70% 35%, #4caf50 60%, transparent 62%),
+    radial-gradient(circle at 40% 40%, #4aa3ff, #1d5fbf 70%, #0f3a7a);
+}
+.planet-mars { background: radial-gradient(circle at 35% 35%, #ffb08a, #d4552b 55%, #8c2a12); }
+.planet-jupiter {
+  background:
+    radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.35), transparent 40%),
+    radial-gradient(ellipse 22% 14% at 62% 64%, #c0573a 70%, transparent 72%),
+    linear-gradient(180deg, #e9d3b0 0 18%, #c79a6b 18% 30%, #f1e2c6 30% 44%, #b97f52 44% 56%, #ead6b5 56% 70%, #c4936a 70% 82%, #e3cba4 82%);
+}
+.planet-saturn { background: radial-gradient(circle at 35% 35%, #fff2cf, #e2c27f 55%, #a98545); }
+.planet-saturn::after {
+  content: '';
+  position: absolute;
+  left: -30%;
+  right: -30%;
+  top: 42%;
+  height: 16%;
+  border-radius: 50%;
+  border: 3px solid rgb(226 200 140 / 0.9);
+  transform: rotate(-18deg);
+}
+.planet-uranus { background: radial-gradient(circle at 35% 35%, #e3fbff, #8fe0ea 55%, #3fa7b6); }
+.planet-neptune { background: radial-gradient(circle at 35% 35%, #b9ccff, #3a5fd9 55%, #1b2d86); }
+
+@media (prefers-reduced-motion: reduce) {
+  .solar *,
+  .solar *::before,
+  .solar *::after {
+    animation: none !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+  }
+  .solar[data-open='true'] .solar-planet {
+    opacity: 0;
+  }
+}

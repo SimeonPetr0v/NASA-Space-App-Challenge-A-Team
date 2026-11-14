@@ -53,7 +53,7 @@ export function HazardGrid() {
         initial="hidden"
         whileInView="show"
         viewport={{ once: true, amount: 0.2 }}
-        className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"
+        className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2 lg:grid-cols-5"
       >
         {list.map((h) => {
           const Icon = ICON[h]

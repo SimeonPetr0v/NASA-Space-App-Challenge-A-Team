@@ -22,7 +22,7 @@ export function Methodology() {
     <RevealGrid className="grid grid-cols-[minmax(0,1fr)] gap-6">
       <Panel aria-labelledby="how-title">
         <PanelHeader id="how-title" title="How the assessment works" />
-        <ol className="grid gap-px sm:grid-cols-4">
+        <ol className="grid grid-cols-[minmax(0,1fr)] gap-px sm:grid-cols-4">
           {[
             ['Log', 'The crew member enters readings from on-board devices or self-report.'],
             ['Assess', 'Each value is compared with its range and the personal baseline. Combinations are checked.'],
@@ -133,7 +133,7 @@ export function Methodology() {
         <PanelHeader id="combo-title" title="Combination rules" meta="Escalate even when each single value is only caution" />
         <ul className="divide-border divide-y">
           {COMBINATION_RULES.map((r) => (
-            <li key={r.id} className="grid gap-1 p-4 text-sm sm:grid-cols-[16rem_1fr] sm:gap-6 sm:p-5">
+            <li key={r.id} className="grid grid-cols-[minmax(0,1fr)] gap-1 p-4 text-sm sm:grid-cols-[16rem_1fr] sm:gap-6 sm:p-5">
               <p className="font-medium">{r.title}</p>
               <p className="text-muted-foreground">{r.detail}</p>
             </li>

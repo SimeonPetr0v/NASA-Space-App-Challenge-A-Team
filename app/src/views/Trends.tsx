@@ -114,7 +114,7 @@ export function Trends({ param }: { param?: string }) {
           </div>
         </Panel>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-2">
           <Panel aria-labelledby="why-title">
             <PanelHeader id="why-title" title="Why it matters in space" />
             <div className="grid gap-3 p-4 text-sm sm:p-5">

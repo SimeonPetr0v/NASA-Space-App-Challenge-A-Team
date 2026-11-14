@@ -330,7 +330,7 @@ export function CameraPulse() {
       <div className="grid gap-4 p-4 sm:p-5">
         {phase === "done" ? (
           <div
-            className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center"
+            className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-[auto_1fr] sm:items-center"
             aria-live="polite"
           >
             {result ? (
@@ -397,7 +397,7 @@ export function CameraPulse() {
             </div>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
             <DeviceHint lens={lens} computer={!touch} />
             <div className="grid gap-3">
               {touch && (

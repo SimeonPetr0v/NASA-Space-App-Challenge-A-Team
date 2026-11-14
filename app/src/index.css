@@ -64,6 +64,10 @@
 }
 
 @layer base {
+  /* A grid with no column setting gets one column that can shrink, so long content never widens the page on phones */
+  .grid:not([class*="grid-cols"]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
   html {
     -webkit-text-size-adjust: 100%;
   }
