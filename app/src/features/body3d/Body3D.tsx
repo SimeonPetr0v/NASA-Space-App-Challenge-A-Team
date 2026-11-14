@@ -7,6 +7,7 @@ import { StatusGlyph } from '@/components/StatusBadge'
 import { STATUS_META } from '@/components/status-meta'
 import type { BodyRegion, Status } from '@/engine/types'
 import { BodyModel } from './BodyModel'
+import { TISSUE_LABEL } from './palette'
 import { HOME_VIEW, REGIONS } from './regions'
 import { useBodyModel } from './useBodyModel'
 
@@ -33,7 +34,7 @@ function Loading() {
 type MarkerEls = { label: HTMLButtonElement | null; dot: HTMLSpanElement | null; line: SVGLineElement | null }
 type Markers = RefObject<Partial<Record<BodyRegion, MarkerEls>>>
 
-type SceneProps = Body3DProps & { hovered: BodyRegion | null; setHovered: (r: BodyRegion | null) => void; markers: Markers; onPlaced: () => void }
+type SceneProps = Body3DProps & { hovered: BodyRegion | null; setHovered: (r: BodyRegion | null) => void; setHoveredPart: (t: string | null) => void; markers: Markers; onPlaced: () => void }
 
 /*
   Projects each region's marker point to screen space every frame and moves the
@@ -100,7 +101,7 @@ function MarkerProjector({ geometry, markers, onPlaced }: { geometry: ReturnType
   return null
 }
 
-function Scene({ theme, statusByRegion, selected, onSelect, hovered, setHovered, markers, onPlaced }: SceneProps) {
+function Scene({ theme, statusByRegion, selected, onSelect, hovered, setHovered, setHoveredPart, markers, onPlaced }: SceneProps) {
   const model = useBodyModel()
   const [controls, setControls] = useState<CameraControls | null>(null)
   const placed = useRef(false)
@@ -127,6 +128,7 @@ function Scene({ theme, statusByRegion, selected, onSelect, hovered, setHovered,
         hovered={hovered}
         onSelect={(r) => onSelect(r === selected ? null : r)}
         onHover={setHovered}
+        onHoverPart={setHoveredPart}
       />
       <MarkerProjector geometry={model.geometry} markers={markers} onPlaced={onPlaced} />
       <CameraControls ref={setControls} minDistance={0.25} maxDistance={5} smoothTime={0.35} />
@@ -137,6 +139,7 @@ function Scene({ theme, statusByRegion, selected, onSelect, hovered, setHovered,
 export default function Body3D(props: Body3DProps) {
   const { theme, statusByRegion, selected, onSelect } = props
   const [hovered, setHovered] = useState<BodyRegion | null>(null)
+  const [hoveredPart, setHoveredPart] = useState<string | null>(null)
   const markers = useRef<Partial<Record<BodyRegion, MarkerEls>>>({})
   const [placed, setPlaced] = useState(false)
   const slot = (id: BodyRegion) => (markers.current[id] ??= { label: null, dot: null, line: null })
@@ -160,13 +163,19 @@ export default function Body3D(props: Body3DProps) {
         </Environment>
 
         <Suspense fallback={<Loading />}>
-          <Scene {...props} hovered={hovered} setHovered={setHovered} markers={markers} onPlaced={() => setPlaced(true)} />
+          <Scene {...props} hovered={hovered} setHovered={setHovered} setHoveredPart={setHoveredPart} markers={markers} onPlaced={() => setPlaced(true)} />
         </Suspense>
 
         <ContactShadows position={[0, 0, 0]} opacity={theme === 'night' ? 0.25 : 0.35} scale={2.5} blur={2.4} far={1} />
       </Canvas>
 
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        {hoveredPart && TISSUE_LABEL[hoveredPart] && (
+          <p className="bg-card/95 border-border-strong text-card-foreground absolute bottom-3 left-3 z-10 rounded-sm border px-2.5 py-1.5 text-xs shadow-[var(--shadow-card)]" aria-hidden="true">
+            <span className="font-semibold">{TISSUE_LABEL[hoveredPart]}</span>
+            <span className="text-muted-foreground"> · {REGIONS.find((r) => r.id === hoveredPart.split(':')[0])?.short}</span>
+          </p>
+        )}
         {placed && !reducedMotion() && (
           <motion.div
             aria-hidden="true"

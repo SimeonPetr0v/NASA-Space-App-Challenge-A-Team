@@ -21,25 +21,33 @@ type Props = {
   hovered: BodyRegion | null
   onSelect: (region: BodyRegion) => void
   onHover: (region: BodyRegion | null) => void
+  onHoverPart?: (tissue: string | null) => void
 }
+
+const SKIN = 'whole-body:base'
 
 const regionOf = (obj: THREE.Object3D) => obj.userData.region as BodyRegion | undefined
 
+/* Nearest part that is not the see-through skin; the skin only when nothing is behind it */
+const pickPart = (e: ThreeEvent<MouseEvent | PointerEvent>) => {
+  const hits = e.intersections.map((i) => i.object).filter((o) => regionOf(o) !== undefined)
+  return hits.find((o) => o.userData.tissue !== SKIN) ?? hits[0]
+}
 const pickRegion = (e: ThreeEvent<MouseEvent | PointerEvent>) => {
-  const regions = e.intersections.map((i) => regionOf(i.object)).filter((r): r is BodyRegion => r !== undefined)
-  return regions.find((r) => r !== 'whole-body') ?? regions[0]
+  const o = pickPart(e)
+  return o ? regionOf(o) : undefined
 }
 
 const allMeshes = (model: BodyModelData) => Object.values(model.meshesByRegion).flat()
 
-export function BodyModel({ model, theme, statusByRegion, selected, hovered, onSelect, onHover }: Props) {
+export function BodyModel({ model, theme, statusByRegion, selected, hovered, onSelect, onHover, onHoverPart }: Props) {
   const materials = useMemo(() => {
     const map = new Map<string, THREE.MeshPhysicalMaterial>()
     for (const mesh of allMeshes(model)) {
       const tissue = mesh.userData.tissue as string
       if (map.has(tissue)) continue
       const look = TISSUE[tissue] ?? FALLBACK_TISSUE
-      const isSkin = tissue.startsWith('whole-body')
+      const isSkin = tissue === SKIN
       map.set(
         tissue,
         new THREE.MeshPhysicalMaterial({
@@ -62,16 +70,15 @@ export function BodyModel({ model, theme, statusByRegion, selected, hovered, onS
   useEffect(() => {
     for (const mesh of allMeshes(model)) {
       const tissue = mesh.userData.tissue as string
-      const region = mesh.userData.region as BodyRegion
       const material = materials.get(tissue)
       if (!material) continue
       mesh.material = material
-      mesh.renderOrder = region === 'whole-body' ? 2 : 1
+      mesh.renderOrder = tissue === SKIN ? 2 : 1
     }
     for (const [tissue, material] of materials) {
       const region = tissue.split(':')[0] as BodyRegion
       const look = TISSUE[tissue] ?? FALLBACK_TISSUE
-      const isSkin = region === 'whole-body'
+      const isSkin = tissue === SKIN
       const isActive = selected === region || hovered === region
       const dimmed = selected !== null && selected !== region
       material.color.set(theme === 'night' ? look.night : look.day)
@@ -95,12 +102,15 @@ export function BodyModel({ model, theme, statusByRegion, selected, hovered, onS
       }}
       onPointerMove={(e: ThreeEvent<PointerEvent>) => {
         e.stopPropagation()
-        const region = pickRegion(e) ?? null
+        const part = pickPart(e)
+        const region = part ? (regionOf(part) ?? null) : null
         if (region !== hovered) onHover(region)
+        onHoverPart?.((part?.userData.tissue as string | undefined) ?? null)
         document.body.style.cursor = region ? 'pointer' : ''
       }}
       onPointerOut={() => {
         onHover(null)
+        onHoverPart?.(null)
         document.body.style.cursor = ''
       }}
     />

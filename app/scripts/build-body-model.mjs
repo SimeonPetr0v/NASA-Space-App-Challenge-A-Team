@@ -52,11 +52,33 @@ const readObj = (path) => {
   return { positions, indices }
 }
 
-const readGroup = (dir, idsFiles) => {
+const readGroup = (dir, idsFiles) => readElements(dir, idsFiles.flatMap((f) => readFileSync(join_(dir, f), 'utf8').split(/\r?\n/).filter(Boolean)))
+
+/* Element files for FMA concepts, from partof_element_parts.txt (concept id, name, element file id) */
+const conceptElements = (dir) => {
+  const map = new Map()
+  for (const [concept, , element] of readFileSync(join_(dir, 'partof_element_parts.txt'), 'utf8').split(/\r?\n/).slice(1).map((l) => l.split('\t'))) {
+    if (concept && element) map.set(concept, [...(map.get(concept) ?? []), element])
+  }
+  return map
+}
+
+/* Hand bones: every left/right carpal, metacarpal and phalanx concept in partof_parts_list_e.txt */
+const handBoneConcepts = (dir) => {
+  const BONE = /(carpal|metacarpal|phalanx of|scaphoid|lunate|triquetral|pisiform|trapezium|trapezoid|capitate|hamate)/i
+  const NOT = /(artery|vein|nerve|ligament|joint|muscle|tendon|branch|head of|base of|shaft of|body of|part of|surface|tubercle|articular|toe|foot|tars)/i
+  return readFileSync(join_(dir, 'partof_parts_list_e.txt'), 'utf8')
+    .split(/\r?\n/)
+    .slice(1)
+    .map((l) => l.split('\t'))
+    .filter(([c, , name]) => c && BONE.test(name) && !NOT.test(name) && /(left|right)/.test(name))
+    .map(([c, , name]) => ({ concept: c, side: /left/.test(name) ? 'left' : 'right' }))
+}
+
+const readElements = (dir, ids) => {
   const positions = []
   const indices = []
-  const ids = idsFiles.flatMap((f) => readFileSync(join_(dir, f), 'utf8').split(/\r?\n/).filter(Boolean))
-  for (const id of ids) {
+  for (const id of [...new Set(ids)]) {
     const part = readObj(join_(dir, 'obj', `${id}.obj`))
     const offset = positions.length / 3
     positions.push(...part.positions)
@@ -152,6 +174,77 @@ async function addBodyParts3D(dir) {
   addPart("coronary_arteries", map(arteries), arteries.indices, "heart:artery", 14000)
   addPart("coronary_veins", map(veins), veins.indices, "heart:vein", 4000)
 
+  /*
+    The skeleton the HRA model lacks (skull, jaw, shoulder girdle, arms, hands)
+    and the stomach. Each group is placed by mapping a BodyParts3D anchor onto
+    the same anatomy in our body: lungs for the shoulders and arms (as the
+    ribs), brain + eyes for the skull, lungs + liver for the stomach.
+  */
+  const elements = conceptElements(dir)
+  const concepts = (...ids) => readElements(dir, ids.flatMap((c) => elements.get(c) ?? []))
+  const yUp = (g) => toYUp(g.positions, mirrorX)
+  const fromLungs = (g) => mapBounds(yUp(g), bpLungs, hraLungs)
+
+  const skull = concepts("FMA46565")
+  const jaw = concepts("FMA52748")
+  const bpHead = boundsOf(yUp(concepts("FMA50801", "FMA12514", "FMA12515")))
+  const hraHead = unionBounds([...nodesOf("brain"), ...nodesOf("eyes")])
+  addPart("skull", mapBounds(yUp(skull), bpHead, hraHead), skull.indices, "musculoskeletal", 16000)
+  addPart("mandible", mapBounds(yUp(jaw), bpHead, hraHead), jaw.indices, "musculoskeletal", 3000)
+
+  /*
+    Our skin holds the arms further from the body than BodyParts3D does, so each
+    arm + hand is fitted to its own skin arm: the shoulder end stays where the
+    lungs mapping puts it, and the bone chain is stretched until the fingertips
+    sit just inside the skin's outermost and lowest hand points.
+  */
+  const skin = []
+  for (const n of nodesOf("whole-body")) {
+    const m = n.getWorldMatrix()
+    for (const p of n.getMesh().listPrimitives()) {
+      const a = p.getAttribute("POSITION")
+      const v = [0, 0, 0]
+      for (let i = 0; i < a.getCount(); i++) {
+        a.getElement(i, v)
+        skin.push(m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12], m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13])
+      }
+    }
+  }
+  const SOFT_TISSUE = 0.012
+  const hands = handBoneConcepts(dir)
+  for (const side of ["right", "left"]) {
+    const r = side === "right"
+    const girdle = concepts(r ? "FMA13322" : "FMA13323", r ? "FMA13395" : "FMA13396")
+    const arm = concepts(r ? "FMA23130" : "FMA23131", r ? "FMA23464" : "FMA23465", r ? "FMA23467" : "FMA23468")
+    const hand = concepts(...hands.filter((h) => h.side === side).map((h) => h.concept))
+    const armPos = fromLungs(arm)
+    const handPos = fromLungs(hand)
+    const from = boundsOf([...armPos, ...handPos])
+    const sign = Math.sign(from.min[0] + from.max[0])
+    let outer = 0
+    let lowest = Infinity
+    for (let i = 0; i < skin.length; i += 2) {
+      if (skin[i] * sign < 0.3) continue
+      outer = Math.max(outer, skin[i] * sign)
+      lowest = Math.min(lowest, skin[i + 1])
+    }
+    const to = { min: [...from.min], max: [...from.max] }
+    if (sign > 0) to.max[0] = outer - SOFT_TISSUE
+    else to.min[0] = -(outer - SOFT_TISSUE)
+    to.min[1] = lowest + SOFT_TISSUE
+    console.log(`arm fit ${side}: outer x ${(from.max[0] * sign > 0 ? from.max[0] : -from.min[0]).toFixed(3)} → ${(outer - SOFT_TISSUE).toFixed(3)}, bottom ${from.min[1].toFixed(3)} → ${to.min[1].toFixed(3)}`)
+    addPart(`shoulder_${side}`, fromLungs(girdle), girdle.indices, "musculoskeletal", 4000)
+    addPart(`arm_${side}`, new Float32Array(mapBounds(armPos, from, to)), arm.indices, "musculoskeletal", 6000)
+    addPart(`hand_${side}`, new Float32Array(mapBounds(handPos, from, to)), hand.indices, "musculoskeletal", 6000)
+  }
+
+  doc.createMaterial("whole-body:stomach").setBaseColorFactor([0.85, 0.55, 0.5, 1]).setRoughnessFactor(0.5).setMetallicFactor(0)
+  const stomach = concepts("FMA7148")
+  const bpLiver = boundsOf(yUp(concepts("FMA7197")))
+  const union = (a, b) => ({ min: a.min.map((v, i) => Math.min(v, b.min[i])), max: a.max.map((v, i) => Math.max(v, b.max[i])) })
+  const hraLiver = unionBounds(nodesOf("whole-body:liver"))
+  addPart("stomach", mapBounds(yUp(stomach), union(bpLungs, bpLiver), union(hraLungs, hraLiver)), stomach.indices, "whole-body:stomach", 6000)
+
   await doc.transform(normals({ overwrite: false }))
 }
 
@@ -163,6 +256,17 @@ const REGIONS = {
   lungs: { nodes: ['VH_M_lungs'], targetTris: 20000, color: [0.89, 0.55, 0.56, 1] },
   immune: { nodes: ['VH_M_spleen'], targetTris: 12000, color: [0.55, 0.23, 0.32, 1] },
   musculoskeletal: { nodes: ['VH_M_vertebral_column', 'VH_M_pelvis', 'VH_M_lower_limb'], targetTris: 45000, maxError: 0.5, color: [0.91, 0.89, 0.83, 1] },
+  /* More organs, grouped under the body system (app region) they relate to; material = `${region}:${part}` */
+  'brain:spinal-cord': { nodes: ['VH_M_spinal_cord'], targetTris: 4000, maxError: 0.5, color: [0.93, 0.85, 0.7, 1] },
+  'lungs:airway': { nodes: ['VH_M_tracheobronchial_tree'], targetTris: 14000, maxError: 0.5, color: [0.9, 0.8, 0.75, 1] },
+  'immune:thymus': { nodes: ['VH_M_thymus'], targetTris: 2000, color: [0.8, 0.6, 0.55, 1] },
+  'immune:lymph': { nodes: ['Yao_lymph_node'], targetTris: 8000, maxError: 0.5, color: [0.6, 0.75, 0.45, 1] },
+  'whole-body:liver': { nodes: ['VH_M_liver'], targetTris: 14000, color: [0.5, 0.18, 0.15, 1] },
+  'whole-body:gallbladder': { nodes: ['VH_M_gallbladder_'], targetTris: 1500, color: [0.3, 0.55, 0.3, 1] },
+  'whole-body:pancreas': { nodes: ['VH_M_pancreas'], targetTris: 6000, color: [0.9, 0.75, 0.55, 1] },
+  'whole-body:intestine': { nodes: ['VH_M_small_intestine', 'VH_M_colon'], targetTris: 22000, maxError: 0.5, color: [0.85, 0.6, 0.55, 1] },
+  'whole-body:kidney': { nodes: ['VH_M_upper_urinary_tract'], targetTris: 10000, maxError: 0.5, color: [0.55, 0.2, 0.2, 1] },
+  'whole-body:bladder': { nodes: ['VH_M_urinary_bladder'], targetTris: 2500, color: [0.85, 0.75, 0.5, 1] },
 }
 
 const TARGET_HEIGHT = 1.8

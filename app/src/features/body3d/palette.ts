@@ -33,6 +33,41 @@ export const TISSUE: Record<string, TissueLook> = {
   'lungs:base': { day: '#d98f8c', night: '#c46d4f', roughness: 0.55, clearcoat: 0.4, sheen: '#f4c3bf' },
   'immune:base': { day: '#6e2238', night: '#8c3f2c', roughness: 0.4, clearcoat: 0.6, sheen: '#a8506a' },
   'musculoskeletal:base': { day: '#e4dccb', night: '#c9a77d', roughness: 0.7, clearcoat: 0.1 },
+  'brain:spinal-cord': { day: '#e8d6b0', night: '#c99a68', roughness: 0.45, clearcoat: 0.4 },
+  'lungs:airway': { day: '#e6cfc4', night: '#c99070', roughness: 0.5, clearcoat: 0.3 },
+  'immune:thymus': { day: '#cf9a8a', night: '#b9785a', roughness: 0.5, clearcoat: 0.4 },
+  'immune:lymph': { day: '#9fbf6e', night: '#b8a45a', roughness: 0.45, clearcoat: 0.5 },
+  'whole-body:liver': { day: '#7a2a1e', night: '#9a4a2c', roughness: 0.35, clearcoat: 0.7, sheen: '#b5574a' },
+  'whole-body:gallbladder': { day: '#4f7a3c', night: '#8a8040', roughness: 0.3, clearcoat: 0.8 },
+  'whole-body:pancreas': { day: '#e0b98a', night: '#c99a62', roughness: 0.55, clearcoat: 0.3 },
+  'whole-body:intestine': { day: '#d99a8c', night: '#c27a5a', roughness: 0.45, clearcoat: 0.5, sheen: '#f0c0b5' },
+  'whole-body:kidney': { day: '#8a2f2a', night: '#a04a30', roughness: 0.35, clearcoat: 0.7 },
+  'whole-body:bladder': { day: '#e3c98a', night: '#c9a062', roughness: 0.4, clearcoat: 0.5 },
+  'whole-body:stomach': { day: '#d98a80', night: '#c47458', roughness: 0.45, clearcoat: 0.5, sheen: '#f2b8ad' },
+}
+
+/** Name shown when hovering a part of the body */
+export const TISSUE_LABEL: Record<string, string> = {
+  'whole-body:base': 'Skin',
+  'brain:base': 'Brain',
+  'brain:spinal-cord': 'Spinal cord',
+  'eyes:base': 'Eyes',
+  'heart:base': 'Heart',
+  'heart:artery': 'Coronary arteries',
+  'heart:vein': 'Coronary veins',
+  'lungs:base': 'Lungs',
+  'lungs:airway': 'Trachea and bronchi',
+  'immune:base': 'Spleen',
+  'immune:thymus': 'Thymus',
+  'immune:lymph': 'Lymph nodes',
+  'musculoskeletal:base': 'Skeleton',
+  'whole-body:liver': 'Liver',
+  'whole-body:gallbladder': 'Gallbladder',
+  'whole-body:pancreas': 'Pancreas',
+  'whole-body:intestine': 'Intestines',
+  'whole-body:kidney': 'Kidneys',
+  'whole-body:bladder': 'Bladder',
+  'whole-body:stomach': 'Stomach',
 }
 
 export const FALLBACK_TISSUE: TissueLook = { day: '#bbbbbb', night: '#8b7a66', roughness: 0.5, clearcoat: 0.2 }
