@@ -80,17 +80,16 @@ export const GAUGES: Record<IndicatorId, Gauge> = {
   mood: {
     value: num,
     zones: [
-      { from: 1, to: 2.5, status: 'danger' },
-      { from: 2.5, to: 3.5, status: 'caution' },
+      { from: 1, to: 3.5, status: 'caution' },
       { from: 3.5, to: 5, status: 'normal' },
     ],
   },
   exercise: {
     value: num,
     zones: [
-      { from: 0, to: 60, status: 'danger' },
-      { from: 60, to: 120, status: 'caution' },
-      { from: 120, to: 180, status: 'normal' },
+      { from: 0, to: 120, status: 'caution' },
+      { from: 120, to: 150, status: 'normal' },
+      { from: 150, to: 240, status: 'caution' },
     ],
   },
 }

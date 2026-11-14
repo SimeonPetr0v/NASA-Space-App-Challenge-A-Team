@@ -139,9 +139,7 @@ export const INDICATORS: Record<IndicatorId, IndicatorDefinition> = {
     sourceUrl: 'https://www.nasa.gov/hrp/risks/',
     classify: (value) => {
       const v = num(value)
-      if (v <= 2) return 'danger'
-      if (v === 3) return 'caution'
-      return 'normal'
+      return v <= 3 ? 'caution' : 'normal'
     },
   },
   exercise: {
@@ -153,12 +151,10 @@ export const INDICATORS: Record<IndicatorId, IndicatorDefinition> = {
     howToMeasure: 'Minutes logged on the treadmill, cycle and resistive device today.',
     whyInSpace: 'Without gravity bones lose about 1–1.5 % density a month; ISS crews train about 2 h a day.',
     schedule: 'Every day',
-    sourceUrl: 'https://www.nasa.gov/hrp/risks/',
+    sourceUrl: 'https://www.nasa.gov/missions/station/iss-research/astronaut-exercise/',
     classify: (value) => {
       const v = num(value)
-      if (v < 60) return 'danger'
-      if (v < 120) return 'caution'
-      return 'normal'
+      return v < 120 || v > 150 ? 'caution' : 'normal'
     },
   },
 }
