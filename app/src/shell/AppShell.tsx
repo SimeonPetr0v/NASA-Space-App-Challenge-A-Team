@@ -1,6 +1,8 @@
-import { BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Moon, RadioTower, Rocket } from 'lucide-react'
+import { Users, BedDouble, BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Moon, RadioTower, Rocket, Sun } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { CrewSwitcher } from '@/components/CrewSwitcher'
+import { FEATURES } from '@/config/features'
+import { PlayDemoButton } from '@/features/demo/DemoPlayer'
 import { CREW } from '@/data/crew'
 import { DEMO_TODAY } from '@/data/demo-readings'
 import { MISSION_DAY_TODAY, MISSION_ORDER, MISSIONS } from '@/data/missions'
@@ -19,6 +21,10 @@ const NAV: { route: Route; label: string; icon: typeof LayoutDashboard }[] = [
   { route: 'brief', label: 'Mission brief', icon: Rocket },
 ]
 
+/* At night the Sleep shift page (night quick actions) joins the menu, right after Overview */
+const NIGHT_NAV = [NAV[0], { route: 'sleep' as Route, label: 'Sleep shift', icon: BedDouble }, ...NAV.slice(1)]
+const useNav = () => (useStore().theme === 'night' ? NIGHT_NAV : NAV)
+
 const TITLES: Record<Route, string> = {
   overview: 'Overview',
   log: 'Log reading',
@@ -26,6 +32,8 @@ const TITLES: Record<Route, string> = {
   link: 'Earth link',
   method: 'Methodology',
   brief: 'Mission brief',
+  sleep: 'Sleep shift',
+  crew: 'Crew board',
 }
 
 /* Mission elapsed time: day 1 started at 00:00 UTC, MISSION_DAY_TODAY - 1 days before the demo morning check */
@@ -48,6 +56,9 @@ export function Wordmark({ className }: { className?: string }) {
 
 function SideNav({ route }: { route: Route }) {
   const { mode, delaySec, crewId } = useStore()
+  const base = useNav()
+  /* Crew board sits after Overview on desktop; on phones it is reached from the crew switcher */
+  const nav = FEATURES.crewBoard ? [base[0], { route: 'crew' as Route, label: 'Crew board', icon: Users }, ...base.slice(1)] : base
   const m = MISSIONS[mode]
   return (
     <aside className="bg-chrome text-chrome-foreground sticky top-0 hidden h-svh w-60 shrink-0 flex-col lg:flex">
@@ -55,7 +66,7 @@ function SideNav({ route }: { route: Route }) {
         <Wordmark />
       </div>
       <nav aria-label="Main" className="flex flex-col gap-px p-3">
-        {NAV.map(({ route: r, label, icon: Icon }) => (
+        {nav.map(({ route: r, label, icon: Icon }) => (
           <a
             key={r}
             href={href(r)}
@@ -132,7 +143,8 @@ function MissionSwitcher() {
 }
 
 function TopBar({ route }: { route: Route }) {
-  const { setTheme, clock } = useStore()
+  const { theme, setTheme, clock } = useStore()
+  const night = theme === 'night'
   const now = useSimNow(1000)
   const met = Math.max(0, now - LAUNCH)
   const d = Math.floor(met / 86_400_000)
@@ -170,26 +182,33 @@ function TopBar({ route }: { route: Route }) {
             </div>
           )}
         </dl>
+        {FEATURES.playDemo && <PlayDemoButton className="hidden sm:flex" />}
         <CrewSwitcher />
         <MissionSwitcher />
         <button
           type="button"
-          onClick={() => setTheme('night')}
+          onClick={() => setTheme(night ? 'day' : 'night')}
           className="border-border-strong text-muted-foreground hover:text-foreground hover:bg-muted flex size-11 items-center justify-center rounded-sm border md:size-9"
-          aria-label="Switch to sleep-shift night mode"
-          title="Sleep-shift night mode"
+          aria-label={night ? 'Night mode on. Switch to day mode' : 'Switch to sleep-shift night mode'}
+          aria-pressed={night}
+          title={night ? 'Day mode' : 'Sleep-shift night mode'}
         >
-          <Moon className="size-4" strokeWidth={1.75} aria-hidden="true" />
+          {night ? <Sun className="size-4" strokeWidth={1.75} aria-hidden="true" /> : <Moon className="size-4" strokeWidth={1.75} aria-hidden="true" />}
         </button>
       </div>
     </header>
   )
 }
 
+const SHORT: Record<string, string> = { 'Log reading': 'Log', Methodology: 'Method', 'Mission brief': 'Brief', 'Sleep shift': 'Sleep' }
+const TIGHT: Record<string, string> = { Overview: 'Home', 'Earth link': 'Link' }
+const shortLabel = (label: string, tight: boolean) => (tight && TIGHT[label]) || SHORT[label] || label
+
 function MobileNav({ route }: { route: Route }) {
+  const nav = useNav()
   return (
-    <nav aria-label="Main" className="bg-card border-border fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t pb-[env(safe-area-inset-bottom)] lg:hidden">
-      {NAV.map(({ route: r, label, icon: Icon }) => (
+    <nav aria-label="Main" style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }} className="bg-card border-border fixed inset-x-0 bottom-0 z-30 grid border-t pb-[env(safe-area-inset-bottom)] lg:hidden">
+      {nav.map(({ route: r, label, icon: Icon }) => (
         <a
           key={r}
           href={href(r)}
@@ -201,7 +220,7 @@ function MobileNav({ route }: { route: Route }) {
         >
           {route === r && <span aria-hidden="true" className="bg-foreground absolute inset-x-4 top-0 h-0.5" />}
           <Icon className="size-[1.125rem]" strokeWidth={1.75} aria-hidden="true" />
-          <span className="max-w-full truncate px-1">{label.replace('Log reading', 'Log').replace('Methodology', 'Method').replace('Mission brief', 'Brief')}</span>
+          <span className="max-w-full truncate px-1">{shortLabel(label, nav.length > 6)}</span>
         </a>
       ))}
     </nav>

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 
-export type Route = 'overview' | 'log' | 'trends' | 'link' | 'method' | 'brief'
+export type Route = 'overview' | 'log' | 'trends' | 'link' | 'method' | 'brief' | 'sleep' | 'crew'
 
-const ROUTES: Route[] = ['overview', 'log', 'trends', 'link', 'method', 'brief']
+const ROUTES: Route[] = ['overview', 'log', 'trends', 'link', 'method', 'brief', 'sleep', 'crew']
 
 function parse(): { route: Route; param?: string } {
   const [, route, param] = window.location.hash.split('/')

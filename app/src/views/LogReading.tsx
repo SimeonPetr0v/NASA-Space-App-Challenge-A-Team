@@ -1,4 +1,6 @@
 import { PageBanner } from '@/components/PageBanner'
+import { FEATURES } from '@/config/features'
+import { CameraPulse } from '@/features/camera-pulse/CameraPulse'
 import { Page } from '@/shell/Page'
 import { Check, Minus, Plus, Send } from 'lucide-react'
 import { AnimatePresence, motion } from 'motion/react'
@@ -164,6 +166,7 @@ export function LogReading() {
           {storageError}
         </p>
       )}
+      {FEATURES.cameraPulse && <CameraPulse />}
       <Panel aria-labelledby="form-title">
         <PanelHeader id="form-title" title="New reading" meta="Untick anything you did not measure." />
         <form

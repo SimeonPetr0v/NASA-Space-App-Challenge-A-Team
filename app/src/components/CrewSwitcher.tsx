@@ -1,4 +1,7 @@
+import { Users } from 'lucide-react'
 import { StatusGlyph } from '@/components/StatusBadge'
+import { FEATURES } from '@/config/features'
+import { href } from '@/state/route'
 import { STATUS_META } from '@/components/status-meta'
 import { CREW, CREW_ORDER, type CrewId } from '@/data/crew'
 import { cn } from '@/lib/utils'
@@ -37,6 +40,16 @@ export function CrewSwitcher() {
           )
         })}
       </div>
+      {FEATURES.crewBoard && (
+        <a
+          href={href('crew')}
+          aria-label="Crew board: all crew members"
+          title="Crew board"
+          className="border-border-strong text-muted-foreground hover:text-foreground hover:bg-muted flex size-11 shrink-0 items-center justify-center rounded-sm border md:size-9"
+        >
+          <Users className="size-4" strokeWidth={1.75} aria-hidden="true" />
+        </a>
+      )}
       <label className="lg:hidden">
         <span className="sr-only">Crew member</span>
         <select

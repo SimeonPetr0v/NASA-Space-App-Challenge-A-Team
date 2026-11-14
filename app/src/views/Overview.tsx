@@ -1,8 +1,12 @@
-import { ArrowRight, Send } from 'lucide-react'
+import { ArrowRight, BedDouble, Send } from 'lucide-react'
 import { motion } from 'motion/react'
 import { Fragment } from 'react'
 import { staggerChild, staggerParent } from '@/components/motion-config'
 import { MissionTrack } from '@/components/MissionTrack'
+import { FEATURES } from '@/config/features'
+import { RadiationBudget } from '@/features/radiation/RadiationBudget'
+import { TrendWatch } from '@/features/trends/TrendWatch'
+import { ScheduleChip } from '@/features/schedule/ScheduleChip'
 import { RangeGauge } from '@/components/RangeGauge'
 import { Page } from '@/shell/Page'
 import { Panel, PanelHeader } from '@/components/Panel'
@@ -191,10 +195,10 @@ function ReadingsTable() {
           </a>
         }
       />
-      <motion.div role="table" aria-label="Latest readings" className="text-sm" variants={staggerParent} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }}>
+      <motion.div role="table" aria-label="Latest readings" className="text-sm md:overflow-x-auto" variants={staggerParent} initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }}>
         <div
           role="row"
-          className="text-muted-foreground border-border hidden grid-cols-[minmax(11rem,1.4fr)_8rem_7.5rem_7.5rem_5.5rem_8rem_6rem] items-center gap-4 border-b px-5 py-2 md:grid"
+          className="text-muted-foreground border-border hidden min-w-[62rem] grid-cols-[minmax(11rem,1.4fr)_8rem_7.5rem_7.5rem_5.5rem_8rem_6rem] items-center gap-4 border-b px-5 py-2 md:grid"
         >
           <span role="columnheader" className="label">Indicator</span>
           <span role="columnheader" className="label text-right">Reading</span>
@@ -217,7 +221,7 @@ function ReadingsTable() {
           return (
             <Fragment key={r.indicatorId}>
             {(firstOff || firstFine) && (
-              <div role="row" className="border-border bg-muted/40 border-b px-5 py-2">
+              <div role="row" className="border-border bg-muted/40 border-b px-5 py-2 md:min-w-[62rem]">
                 <span role="cell" className="label text-muted-foreground">
                   {firstOff ? `Needs attention · ${attentionCount}` : `Within your limits · ${ordered.length - attentionCount}`}
                 </span>
@@ -228,7 +232,7 @@ function ReadingsTable() {
               role="row"
               href={href('trends', r.indicatorId)}
               aria-label={`${isWho5 ? 'Well-being (WHO-5)' : def.label}: ${shown} ${unit}, ${meta.word}. Open trend.`}
-              className="group border-border hover:bg-muted/60 relative grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1.5 border-b px-5 py-3 last:border-b-0 md:grid-cols-[minmax(11rem,1.4fr)_8rem_7.5rem_7.5rem_5.5rem_8rem_6rem] md:py-2.5"
+              className="group border-border hover:bg-muted/60 relative grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1.5 border-b px-5 py-3 last:border-b-0 md:min-w-[62rem] md:grid-cols-[minmax(11rem,1.4fr)_8rem_7.5rem_7.5rem_5.5rem_8rem_6rem] md:py-2.5"
             >
               {off && <span aria-hidden="true" className={cn('absolute inset-y-0 left-0 w-0.5', meta.rule)} />}
               <span role="cell" className="min-w-0">
@@ -278,10 +282,32 @@ export function Overview() {
   const { theme, mode, delaySec } = useStore()
   return (
     <Page className="grid grid-cols-[minmax(0,1fr)] gap-8 pt-6 pb-16">
-      <MissionTrack mode={mode} delaySec={delaySec} />
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <MissionTrack mode={mode} delaySec={delaySec} />
+        {FEATURES.scheduleReminders && <ScheduleChip />}
+      </div>
+      {theme === 'night' && (
+        <a
+          href={href('sleep')}
+          className="border-border-strong bg-card hover:bg-muted flex min-h-14 items-center gap-4 rounded-sm border px-4 transition-colors sm:px-5"
+        >
+          <BedDouble className="text-primary size-5 shrink-0" strokeWidth={1.75} aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <span className="block font-semibold">Sleep shift</span>
+            <span className="text-muted-foreground block text-sm">Woke up? Log a night waking, take quick vitals or report feeling unwell.</span>
+          </span>
+          <ArrowRight className="text-muted-foreground size-4 shrink-0" aria-hidden="true" />
+        </a>
+      )}
       <section id="status" className="scroll-mt-20">
         <StatusSummary />
       </section>
+      {(FEATURES.trendWarnings || FEATURES.radiation) && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          {FEATURES.trendWarnings && <TrendWatch />}
+          {FEATURES.radiation && <RadiationBudget />}
+        </div>
+      )}
       <Panel aria-labelledby="body-title">
         <PanelHeader id="body-title" title="Body systems" meta="Select a system to see what spaceflight does to it" />
         <BodyExplorer readings={readings} assessments={assessments} theme={theme} />

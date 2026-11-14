@@ -173,7 +173,7 @@ export function SignalPath({ mode, inFlight, now, lastToEarth, lastToCrew }: Pro
 
   return (
     <div className="bg-space relative aspect-[1000/300] w-full overflow-hidden select-none" aria-hidden="true">
-      <svg viewBox={`0 0 ${W} ${H}`} className="absolute inset-0 h-full w-full">
+      <svg viewBox={`0 0 ${W} ${H}`} className="night-warm absolute inset-0 h-full w-full">
         <defs>
           <radialGradient id="sp-ocean" cx="38%" cy="35%" r="70%">
             <stop offset="0%" stopColor="oklch(0.72 0.12 235)" />

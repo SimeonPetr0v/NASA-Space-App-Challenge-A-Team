@@ -9,6 +9,9 @@ import { LogReading } from '@/views/LogReading'
 import { Brief } from '@/views/Brief'
 import { Methodology } from '@/views/Methodology'
 import { NightView } from '@/views/NightView'
+import { FEATURES } from '@/config/features'
+import { CrewBoard } from '@/features/crew-board/CrewBoard'
+import { DemoPlayer } from '@/features/demo/DemoPlayer'
 import { Overview } from '@/views/Overview'
 import { Trends } from '@/views/Trends'
 
@@ -23,14 +26,7 @@ function Screens() {
 
   return (
     <>
-      <AnimatePresence mode="wait">
-        {theme === 'night' ? (
-          <motion.div key="night" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
-            <NightView />
-          </motion.div>
-        ) : (
-          <motion.div key="day" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.4 }}>
-            <AppShell route={route}>
+      <AppShell route={route}>
               <AnimatePresence mode="wait">
                 <motion.div
                   key={route}
@@ -45,13 +41,13 @@ function Screens() {
                   {route === 'link' && <EarthLink />}
                   {route === 'method' && <Methodology />}
                   {route === 'brief' && <Brief />}
+                  {route === 'sleep' && <NightView />}
+                  {route === 'crew' && (FEATURES.crewBoard ? <CrewBoard /> : <Overview />)}
                 </motion.div>
               </AnimatePresence>
-            </AppShell>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </AppShell>
       <TransmitOverlay />
+      {FEATURES.playDemo && <DemoPlayer />}
     </>
   )
 }
