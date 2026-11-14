@@ -14,6 +14,8 @@ const HEIGHT = 1.8
 const MARGIN = 0.015
 const VOXEL = 0.01
 const CELL = 0.03
+const MIN_ARM_X = 0.22
+const SMOOTH_ITERATIONS = 25
 
 const SLIM_KEYS = [
   [0, 0],
@@ -119,9 +121,50 @@ function torsoHalfWidth(env) {
   return (y) => {
     let w = 0
     const b = Math.round(y * 100)
-    for (let k = b - 3; k <= b + 3; k++) w = Math.max(w, bins.get(k) ?? 0)
+    for (let k = b - 8; k <= b + 8; k++) w = Math.max(w, bins.get(k) ?? 0)
     return w
   }
+}
+
+function weldedView(prim, m) {
+  const arr = prim.getAttribute("POSITION").getArray()
+  const count = arr.length / 3
+  const canon = new Int32Array(count)
+  const keyToId = new Map()
+  const pos = []
+  for (let i = 0; i < count; i++) {
+    const key = `${arr[i * 3].toFixed(5)},${arr[i * 3 + 1].toFixed(5)},${arr[i * 3 + 2].toFixed(5)}`
+    let id = keyToId.get(key)
+    if (id === undefined) {
+      id = pos.length
+      keyToId.set(key, id)
+      pos.push(apply(m, arr[i * 3], arr[i * 3 + 1], arr[i * 3 + 2]))
+    }
+    canon[i] = id
+  }
+  const neighbours = pos.map(() => new Set())
+  const idx = prim.getIndices()?.getArray()
+  const triCount = idx ? idx.length / 3 : count / 3
+  for (let t = 0; t < triCount; t++) {
+    const [a, b, c] = [0, 1, 2].map((k) => canon[idx ? idx[t * 3 + k] : t * 3 + k])
+    neighbours[a].add(b).add(c)
+    neighbours[b].add(a).add(c)
+    neighbours[c].add(a).add(b)
+  }
+  return { canon, pos, neighbours: neighbours.map((s) => [...s]) }
+}
+
+function writeBack(prim, inv, canon, pos) {
+  const accessor = prim.getAttribute("POSITION")
+  const arr = accessor.getArray().slice()
+  for (let i = 0; i < canon.length; i++) {
+    const local = apply(inv, ...pos[canon[i]])
+    arr[i * 3] = local[0]
+    arr[i * 3 + 1] = local[1]
+    arr[i * 3 + 2] = local[2]
+  }
+  accessor.setArray(arr)
+  prim.setAttribute("NORMAL", null)
 }
 
 /*
@@ -138,33 +181,7 @@ export async function smoothGroin(doc, log = console.log) {
     const m = node.getWorldMatrix()
     const inv = invertAffine(m)
     for (const prim of node.getMesh().listPrimitives()) {
-      const accessor = prim.getAttribute('POSITION')
-      const arr = accessor.getArray().slice()
-      const count = arr.length / 3
-
-      const canon = new Int32Array(count)
-      const keyToId = new Map()
-      const pos = []
-      for (let i = 0; i < count; i++) {
-        const key = `${arr[i * 3].toFixed(5)},${arr[i * 3 + 1].toFixed(5)},${arr[i * 3 + 2].toFixed(5)}`
-        let id = keyToId.get(key)
-        if (id === undefined) {
-          id = pos.length
-          keyToId.set(key, id)
-          pos.push(apply(m, arr[i * 3], arr[i * 3 + 1], arr[i * 3 + 2]))
-        }
-        canon[i] = id
-      }
-
-      const neighbours = pos.map(() => new Set())
-      const idx = prim.getIndices()?.getArray()
-      const triCount = idx ? idx.length / 3 : count / 3
-      for (let t = 0; t < triCount; t++) {
-        const [a, b, c] = [0, 1, 2].map((k) => canon[idx ? idx[t * 3 + k] : t * 3 + k])
-        neighbours[a].add(b).add(c)
-        neighbours[b].add(a).add(c)
-        neighbours[c].add(a).add(b)
-      }
+      const { canon, pos, neighbours } = weldedView(prim, m)
 
       const weight = pos.map((p) => {
         if (p[2] < GROIN.minZ) return 0
@@ -176,7 +193,7 @@ export async function smoothGroin(doc, log = console.log) {
 
       for (let it = 0; it < GROIN.iterations; it++) {
         const next = free.map((i) => {
-          const nb = [...neighbours[i]]
+          const nb = neighbours[i]
           const avg = [0, 0, 0]
           for (const j of nb) for (let a = 0; a < 3; a++) avg[a] += pos[j][a] / nb.length
           const k = GROIN.step * Math.min(1, weight[i] * 2)
@@ -185,14 +202,7 @@ export async function smoothGroin(doc, log = console.log) {
         free.forEach((i, n) => (pos[i] = next[n]))
       }
 
-      for (let i = 0; i < count; i++) {
-        const local = apply(inv, ...pos[canon[i]])
-        arr[i * 3] = local[0]
-        arr[i * 3 + 1] = local[1]
-        arr[i * 3 + 2] = local[2]
-      }
-      accessor.setArray(arr)
-      prim.setAttribute('NORMAL', null)
+      writeBack(prim, inv, canon, pos)
     }
   }
   await doc.transform(normals({ overwrite: true }))
@@ -214,14 +224,11 @@ export async function slimSkin(doc, log = console.log) {
     const m = node.getWorldMatrix()
     const inv = invertAffine(m)
     for (const prim of node.getMesh().listPrimitives()) {
-      const accessor = prim.getAttribute('POSITION')
-      const arr = accessor.getArray().slice()
-      const world = []
-      for (let i = 0; i < arr.length; i += 3) world.push(apply(m, arr[i], arr[i + 1], arr[i + 2]))
+      const { canon, pos: world, neighbours } = weldedView(prim, m)
 
       const armWeight = (p) => {
         if (p[1] < 0.75 || p[1] > 1.5) return 0
-        const edge = halfWidth(p[1]) + 0.05
+        const edge = Math.max(halfWidth(p[1]) + 0.05, MIN_ARM_X)
         return smooth(Math.min(1, Math.max(0, (Math.abs(p[0]) - edge) / 0.04)))
       }
       const legSide = (p) => (p[1] < 0.47 * HEIGHT ? Math.sign(p[0]) || 1 : 0)
@@ -257,40 +264,57 @@ export async function slimSkin(doc, log = console.log) {
         return [sx / n, minZ + (maxZ - minZ) * zBias]
       }
 
-      for (let v = 0; v < world.length; v++) {
-        total++
-        const p = world[v]
-        const f = slimAt(p[1] / HEIGHT) * (1 - armWeight(p))
-        if (f <= 0.001) continue
-        const c = centreOf(p)
-        if (!c) continue
-        const target = [c[0] + (p[0] - c[0]) * (1 - f), p[1], c[1] + (p[2] - c[1]) * (1 - f)]
-        let t = 1
-        if (tooClose(env, target)) {
-          if (tooClose(env, p)) continue
-          let lo = 0
-          let hi = 1
-          for (let k = 0; k < 7; k++) {
-            const mid = (lo + hi) / 2
-            const q = [p[0] + (target[0] - p[0]) * mid, p[1], p[2] + (target[2] - p[2]) * mid]
-            if (tooClose(env, q)) hi = mid
-            else lo = mid
-          }
-          t = lo
-          clamped++
+      const safeT = (p, d) => {
+        const q = (k) => [p[0] + d[0] * k, p[1], p[2] + d[1] * k]
+        if (!tooClose(env, q(1))) return 1
+        if (tooClose(env, p)) return 0
+        let lo = 0
+        let hi = 1
+        for (let k = 0; k < 7; k++) {
+          const mid = (lo + hi) / 2
+          if (tooClose(env, q(mid))) hi = mid
+          else lo = mid
         }
-        const q = [p[0] + (target[0] - p[0]) * t, p[1], p[2] + (target[2] - p[2]) * t]
-        const local = apply(inv, q[0], q[1], q[2])
-        arr[v * 3] = local[0]
-        arr[v * 3 + 1] = local[1]
-        arr[v * 3 + 2] = local[2]
-        moved++
+        return lo
       }
-      accessor.setArray(arr)
+
+      let disp = world.map((p) => {
+        const f = slimAt(p[1] / HEIGHT) * (1 - armWeight(p))
+        if (f <= 0.001) return [0, 0]
+        const c = centreOf(p)
+        if (!c) return [0, 0]
+        const d = [(c[0] - p[0]) * f, (c[1] - p[2]) * f]
+        const k = safeT(p, d)
+        return [d[0] * k, d[1] * k]
+      })
+
+      for (let it = 0; it < SMOOTH_ITERATIONS; it++) {
+        disp = disp.map((d, i) => {
+          const nb = neighbours[i]
+          if (nb.length === 0) return d
+          let ax = 0
+          let az = 0
+          for (const j of nb) {
+            ax += disp[j][0]
+            az += disp[j][1]
+          }
+          return [(d[0] + ax / nb.length) / 2, (d[1] + az / nb.length) / 2]
+        })
+      }
+
+      const out = world.map((p, i) => {
+        total++
+        const d = disp[i]
+        if (Math.abs(d[0]) + Math.abs(d[1]) < 1e-5) return p
+        const k = safeT(p, d)
+        if (k < 1) clamped++
+        if (k > 0) moved++
+        return [p[0] + d[0] * k, p[1], p[2] + d[1] * k]
+      })
+      writeBack(prim, inv, canon, out)
     }
   }
 
-  for (const node of skins) for (const prim of node.getMesh().listPrimitives()) prim.setAttribute('NORMAL', null)
   await doc.transform(normals({ overwrite: true }))
   log(`skin slimmed: ${moved.toLocaleString()} of ${total.toLocaleString()} vertices moved, ${clamped.toLocaleString()} limited by the organ/bone margin`)
 }
