@@ -67,6 +67,10 @@ export function BodyExplorer({ readings, assessments, theme }: Props) {
           <a className="underline underline-offset-2" href="https://humanatlas.io/3d-reference-library" target="_blank" rel="noreferrer">
             HuBMAP Human Reference Atlas
           </a>
+          , ribs:{' '}
+          <a className="underline underline-offset-2" href="https://dbarchive.biosciencedbc.jp/en/bodyparts3d/" target="_blank" rel="noreferrer">
+            BodyParts3D © DBCLS
+          </a>
           , CC BY 4.0
         </p>
       </div>

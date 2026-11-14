@@ -65,7 +65,7 @@ export function BodyModel({ model, theme, statusByRegion, selected, hovered, onS
         mesh.renderOrder = isSkin ? 2 : 1
       }
       material.color.set(BODY_HEX[theme][BASE_COLOR[region]])
-      material.opacity = isSkin ? (dimmed ? 0.04 : selected === region ? 0.35 : 0.14) : dimmed ? 0.12 : 1
+      material.opacity = isSkin ? (dimmed ? 0.04 : selected === region ? 0.35 : 0.14) : dimmed ? (region === 'musculoskeletal' ? 0.3 : 0.12) : 1
       material.depthWrite = !isSkin && !dimmed
       material.emissive.set(isActive ? STATUS_HEX[theme][statusByRegion[region]] : '#000000')
       material.emissiveIntensity = selected === region ? 0.22 : isActive ? 0.3 : 0

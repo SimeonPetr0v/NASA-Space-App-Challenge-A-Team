@@ -6,15 +6,16 @@
   Download (242 MB, keep it OUT of the repo):
   https://cdn.humanatlas.io/digital-objects/ref-organ/united-male/v1.10/assets/3d-vh-m-united.glb
 
-  Usage: node scripts/build-body-model.mjs <path-to-3d-vh-m-united.glb>
+  Usage: node scripts/build-body-model.mjs <path-to-3d-vh-m-united.glb> [bodyparts3d-dir]
 
   Output: one material per body region (material name = region id used in the app),
   simplified meshes, Y-up, ~1.8 units tall with feet at y = 0, meshopt-compressed.
 */
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
+import { join as join_ } from 'node:path'
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extensions'
-import { flatten, getBounds, join, normals, prune, quantize, simplifyPrimitive, weld } from '@gltf-transform/functions'
+import { flatten, getBounds, join, normals, prune, quantize, simplifyPrimitive, weld, weldPrimitive } from '@gltf-transform/functions'
 import { MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer'
 
 const input = process.argv[2]
@@ -23,6 +24,114 @@ if (!input) {
   process.exit(1)
 }
 const output = 'public/models/body.glb'
+const bp3dDir = process.argv[3]
+
+/*
+  Optional rib cage (the HRA model has no ribs) from BodyParts3D,
+  © The Database Center for Life Science, CC BY 4.0 (current licence page;
+  the 2011 file headers state CC BY-SA 2.1 Japan).
+  https://dbarchive.biosciencedbc.jp/en/bodyparts3d/download.html
+  <bp3dDir> must contain obj/FJ*.obj extracted from partof_BP3D_4.0_obj_99.zip and
+  ids_FMA7480.txt (rib cage), ids_FMA7309.txt + ids_FMA7310.txt (lungs) and
+  ids_FMA7088.txt (heart): element file ids from partof_element_parts.txt.
+  The rib cage is aligned to our body by mapping BodyParts3D lungs onto HRA lungs.
+*/
+const readObj = (path) => {
+  const positions = []
+  const indices = []
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
+    if (line.startsWith('v ')) {
+      const [, x, y, z] = line.trim().split(/\s+/).map(Number)
+      positions.push(x, y, z)
+    } else if (line.startsWith('f ')) {
+      const ids = line.trim().split(/\s+/).slice(1).map((t) => Number(t.split('/')[0]) - 1)
+      for (let i = 1; i < ids.length - 1; i++) indices.push(ids[0], ids[i], ids[i + 1])
+    }
+  }
+  return { positions, indices }
+}
+
+const readGroup = (dir, idsFile) => {
+  const positions = []
+  const indices = []
+  for (const id of readFileSync(join_(dir, idsFile), 'utf8').split(/\r?\n/).filter(Boolean)) {
+    const part = readObj(join_(dir, 'obj', `${id}.obj`))
+    const offset = positions.length / 3
+    positions.push(...part.positions)
+    for (const i of part.indices) indices.push(i + offset)
+  }
+  return { positions, indices }
+}
+
+const boundsOf = (positions) => {
+  const min = [Infinity, Infinity, Infinity]
+  const max = [-Infinity, -Infinity, -Infinity]
+  for (let i = 0; i < positions.length; i += 3) {
+    for (let a = 0; a < 3; a++) {
+      min[a] = Math.min(min[a], positions[i + a])
+      max[a] = Math.max(max[a], positions[i + a])
+    }
+  }
+  return { min, max }
+}
+
+async function addRibCage(dir) {
+  const toYUp = (p, mirrorX) => {
+    const out = []
+    for (let i = 0; i < p.length; i += 3) out.push(mirrorX ? -p[i] : p[i], p[i + 2], -p[i + 1])
+    return out
+  }
+  const rib = readGroup(dir, 'ids_FMA7480.txt')
+  const lungsR = readGroup(dir, 'ids_FMA7309.txt')
+  const lungsL = readGroup(dir, 'ids_FMA7310.txt')
+  const heart = readGroup(dir, 'ids_FMA7088.txt')
+
+  const nodesOf = (region) => root.listNodes().filter((n) => n.getMesh()?.listPrimitives().some((p) => p.getMaterial()?.getName() === region))
+  const unionBounds = (nodes) => {
+    const b = { min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] }
+    for (const n of nodes) {
+      const nb = getBounds(n)
+      for (let a = 0; a < 3; a++) {
+        b.min[a] = Math.min(b.min[a], nb.min[a])
+        b.max[a] = Math.max(b.max[a], nb.max[a])
+      }
+    }
+    return b
+  }
+  const hraLungs = unionBounds(nodesOf('lungs'))
+  const hraHeart = unionBounds(nodesOf('heart'))
+  const centerX = (b) => (b.min[0] + b.max[0]) / 2
+
+  const bpLungsRaw = boundsOf(toYUp([...lungsR.positions, ...lungsL.positions], false))
+  const bpHeartRaw = boundsOf(toYUp(heart.positions, false))
+  const hraHeartSide = Math.sign(centerX(hraHeart) - centerX(hraLungs))
+  const bpHeartSide = Math.sign(centerX(bpHeartRaw) - centerX(bpLungsRaw))
+  const mirrorX = hraHeartSide !== bpHeartSide
+
+  const bpLungs = boundsOf(toYUp([...lungsR.positions, ...lungsL.positions], mirrorX))
+  const ribY = toYUp(rib.positions, mirrorX)
+  const mapped = new Float32Array(ribY.length)
+  for (let i = 0; i < ribY.length; i += 3) {
+    for (let a = 0; a < 3; a++) {
+      const t = (ribY[i + a] - bpLungs.min[a]) / (bpLungs.max[a] - bpLungs.min[a])
+      mapped[i + a] = hraLungs.min[a] + t * (hraLungs.max[a] - hraLungs.min[a])
+    }
+  }
+
+  const buffer = root.listBuffers()[0]
+  const position = doc.createAccessor('ribcage_position').setType('VEC3').setArray(mapped).setBuffer(buffer)
+  const index = doc.createAccessor('ribcage_index').setType('SCALAR').setArray(new Uint32Array(rib.indices)).setBuffer(buffer)
+  const material = root.listMaterials().find((m) => m.getName() === 'musculoskeletal')
+  const prim = doc.createPrimitive().setAttribute('POSITION', position).setIndices(index).setMaterial(material)
+  const mesh = doc.createMesh('ribcage').addPrimitive(prim)
+  scene.addChild(doc.createNode('ribcage').setMesh(mesh))
+
+  weldPrimitive(prim)
+  const before = rib.indices.length / 3
+  const simplified = simplifyPrimitive(prim, { simplifier: MeshoptSimplifier, ratio: Math.min(1, 22000 / before), error: 0.5 })
+  await doc.transform(normals({ overwrite: false }))
+  console.log(`ribcage          ${Math.round(before).toLocaleString().padStart(9)} → ${Math.round(((simplified.getIndices() ?? simplified.getAttribute("POSITION")).getCount()) / 3).toLocaleString()} tris (mirrorX ${mirrorX})`)
+}
 
 const REGIONS = {
   'whole-body': { nodes: ['VH_M_skin'], targetTris: 45000, color: [0.62, 0.72, 0.79, 1] },
@@ -123,6 +232,8 @@ body.setScale([s, s, s]).setTranslation([-cx * s, -rotated.min[1] * s, -cz * s])
 
 const final = getBounds(scene)
 console.log('final bounds min', final.min.map((v) => v.toFixed(3)), 'max', final.max.map((v) => v.toFixed(3)))
+
+if (bp3dDir) await addRibCage(bp3dDir)
 
 await doc.transform(quantize())
 doc.createExtension(EXTMeshoptCompression).setRequired(true).setEncoderOptions({ method: EXTMeshoptCompression.EncoderMethod.QUANTIZE })
