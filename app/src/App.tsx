@@ -11,6 +11,7 @@ import { Methodology } from '@/views/Methodology'
 import { NightView } from '@/views/NightView'
 import { FEATURES } from '@/config/features'
 import { CrewBoard } from '@/features/crew-board/CrewBoard'
+import { DemoPlayer } from '@/features/demo/DemoPlayer'
 import { Overview } from '@/views/Overview'
 import { Trends } from '@/views/Trends'
 
@@ -46,6 +47,7 @@ function Screens() {
               </AnimatePresence>
       </AppShell>
       <TransmitOverlay />
+      {FEATURES.playDemo && <DemoPlayer />}
     </>
   )
 }

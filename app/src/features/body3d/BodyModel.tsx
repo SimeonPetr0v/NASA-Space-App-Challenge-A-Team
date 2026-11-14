@@ -2,7 +2,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import type { BodyRegion, Status } from '@/engine/types'
-import { effectsAt } from '@/features/body-timeline/BodyTimeline'
+import { effectsAt } from '@/features/body-timeline/timeline'
 import { FALLBACK_TISSUE, STATUS_HEX, TISSUE } from './palette'
 
 const LOSS_TINT = new THREE.Color('#9aa0a6')

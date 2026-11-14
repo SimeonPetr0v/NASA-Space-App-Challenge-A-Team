@@ -2,6 +2,7 @@ import { Users, BedDouble, BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, 
 import type { ReactNode } from 'react'
 import { CrewSwitcher } from '@/components/CrewSwitcher'
 import { FEATURES } from '@/config/features'
+import { PlayDemoButton } from '@/features/demo/DemoPlayer'
 import { CREW } from '@/data/crew'
 import { DEMO_TODAY } from '@/data/demo-readings'
 import { MISSION_DAY_TODAY, MISSION_ORDER, MISSIONS } from '@/data/missions'
@@ -181,6 +182,7 @@ function TopBar({ route }: { route: Route }) {
             </div>
           )}
         </dl>
+        {FEATURES.playDemo && <PlayDemoButton className="hidden sm:flex" />}
         <CrewSwitcher />
         <MissionSwitcher />
         <button

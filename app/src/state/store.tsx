@@ -57,6 +57,7 @@ export type Transmission = { id: string; title: string; detail: string; delaySec
 
 type Saved = { readings: Reading[]; checks: WellbeingCheck[]; error: string }
 
+// eslint-disable-next-line react/only-export-components
 export function loadSaved(crewId: CrewId): Saved {
   const out: Saved = { readings: [], checks: [], error: '' }
   try {

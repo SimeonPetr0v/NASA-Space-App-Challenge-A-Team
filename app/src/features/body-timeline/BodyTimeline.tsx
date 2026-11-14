@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { EASE_OUT } from '@/components/motion-config'
 import { HAZARD_SOURCE_URL } from '@/data/indicators'
 import { MISSION_DAY_TODAY } from '@/data/missions'
+import { effectsAt, TIMELINE_MAX_DAY } from './timeline'
 
 /*
   Body over mission time (features.bodyTimeline). A slider from day 1 to 180
@@ -11,19 +12,6 @@ import { MISSION_DAY_TODAY } from '@/data/missions'
   shift toward the head and the SANS eye changes seen after weeks in flight.
   Rates from NASA HRP; the visual is illustrative, not to scale.
 */
-
-export const TIMELINE_MAX_DAY = 180
-
-export function effectsAt(day: number) {
-  const months = day / 30
-  return {
-    boneLossPct: { low: months * 1, high: months * 1.5 },
-    fluidL: Math.min(2, day * 0.7),
-    /** 0..1 visual strength for the 3D body */
-    bone: Math.min(1, day / TIMELINE_MAX_DAY),
-    eyes: Math.min(1, Math.max(0, (day - 14) / (TIMELINE_MAX_DAY - 14))),
-  }
-}
 
 export function BodyTimelineToggle({ day, onChange }: { day: number | null; onChange: (d: number | null) => void }) {
   return (
