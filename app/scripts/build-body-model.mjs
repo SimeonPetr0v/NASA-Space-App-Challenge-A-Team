@@ -216,6 +216,67 @@ async function addBodyParts3D(dir) {
   }
   const SOFT_TISSUE = 0.012
   /*
+    Exact inside-the-skin test for fitting the arm and hand bones: the skin
+    triangles are bucketed in 2 cm height slabs, and a point is inside when a
+    ray from it toward +x crosses the closed skin surface an odd number of
+    times.
+  */
+  const SLAB = 0.02
+  const skinTri = []
+  const slabs = new Map()
+  for (const n of nodesOf("whole-body")) {
+    const m = n.getWorldMatrix()
+    for (const p of n.getMesh().listPrimitives()) {
+      const a = p.getAttribute("POSITION")
+      const idx = p.getIndices()
+      const count = idx ? idx.getCount() : a.getCount()
+      const v = [0, 0, 0]
+      const world = (i) => {
+        a.getElement(i, v)
+        return [m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12], m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13], m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14]]
+      }
+      for (let t = 0; t < count; t += 3) {
+        const tri = [0, 1, 2].map((j) => world(idx ? idx.getScalar(t + j) : t + j))
+        const id = skinTri.length
+        skinTri.push(tri)
+        const y0 = Math.min(tri[0][1], tri[1][1], tri[2][1])
+        const y1 = Math.max(tri[0][1], tri[1][1], tri[2][1])
+        for (let k = Math.floor(y0 / SLAB); k <= Math.floor(y1 / SLAB); k++) {
+          if (!slabs.has(k)) slabs.set(k, [])
+          slabs.get(k).push(id)
+        }
+      }
+    }
+  }
+  const insideSkin = (x, y, z) => {
+    let crossings = 0
+    for (const id of slabs.get(Math.floor(y / SLAB)) ?? []) {
+      const [A, B, C] = skinTri[id]
+      const det = (B[1] - A[1]) * (C[2] - A[2]) - (C[1] - A[1]) * (B[2] - A[2])
+      if (!det) continue
+      const l1 = ((y - A[1]) * (C[2] - A[2]) - (C[1] - A[1]) * (z - A[2])) / det
+      const l2 = ((B[1] - A[1]) * (z - A[2]) - (y - A[1]) * (B[2] - A[2])) / det
+      if (l1 < 0 || l2 < 0 || l1 + l2 > 1) continue
+      if (A[0] + l1 * (B[0] - A[0]) + l2 * (C[0] - A[0]) > x) crossings++
+    }
+    return crossings % 2 === 1
+  }
+  /* Share of (up to max) sampled points of the given position arrays that lie inside the skin */
+  const insideShare = (arrays, max = 700) => {
+    const total = arrays.reduce((t, a) => t + a.length / 3, 0)
+    const step = Math.max(1, Math.floor(total / max))
+    let hit = 0
+    let n = 0
+    let k = 0
+    for (const arr of arrays)
+      for (let i = 0; i < arr.length; i += 3, k++) {
+        if (k % step) continue
+        n++
+        if (insideSkin(arr[i], arr[i + 1], arr[i + 2])) hit++
+      }
+    return hit / Math.max(1, n)
+  }
+  /*
     Then each arm is fitted as a jointed chain, so the bones keep their real
     shape. The upper arm (humerus), the forearm (radius + ulna) and the hand
     each move as one rigid piece, stretched only along their own length:
@@ -504,6 +565,46 @@ async function addBodyParts3D(dir) {
     }
     console.log(`hand fit ${sign > 0 ? 'left' : 'right'}: scale ${fit.map((f) => f.k.toFixed(2)).join(' / ')}, skin axis ${sf.axes[0].map((v) => v.toFixed(2)).join(', ')}, bone axis ${bf.axes[0].map((v) => v.toFixed(2)).join(', ')}`)
 
+    /*
+      Final hand fit: small turns around the wrist (all three axes) and small
+      shifts, searched coarse to fine, keeping whatever puts the most hand
+      bone inside the skin. Rigid, so the hand keeps its shape.
+    */
+    {
+      const pivot = endCentre(hand, true)
+      const base = Float32Array.from(hand)
+      const apply = (q) => {
+        const rx = rotation([0, 1, 0], unit([0, Math.cos(q[0]), Math.sin(q[0])]))
+        const rz = rotation([0, 1, 0], unit([Math.sin(q[2]), Math.cos(q[2]), 0]))
+        const ry = rotation([1, 0, 0], unit([Math.cos(q[1]), 0, -Math.sin(q[1])]))
+        const out = new Float32Array(base.length)
+        for (let i = 0; i < base.length; i += 3) {
+          const d = [base[i] - pivot[0], base[i + 1] - pivot[1], base[i + 2] - pivot[2]]
+          out.set(add(add(pivot, ry(rz(rx(d)))), [q[3], q[4], q[5]]), i)
+        }
+        return out
+      }
+      let q = [0, 0, 0, 0, 0, 0]
+      const start = insideShare([base])
+      let best = start
+      for (const [ang, mv] of [[0.12, 0.012], [0.06, 0.006], [0.03, 0.003], [0.015, 0.0015]]) {
+        for (let pass = 0; pass < 2; pass++)
+          for (let k = 0; k < 6; k++) {
+            for (const dir of [-1, 1]) {
+              const t = [...q]
+              t[k] += dir * (k < 3 ? ang : mv)
+              const sc = insideShare([apply(t)])
+              if (sc > best + 1e-6) {
+                best = sc
+                q = t
+              }
+            }
+          }
+      }
+      hand.set(apply(q))
+      console.log(`hand search ${sign > 0 ? 'left' : 'right'}: inside skin ${(start * 100).toFixed(0)} % -> ${(best * 100).toFixed(0)} % (turns ${q.slice(0, 3).map((a) => ((a * 180) / Math.PI).toFixed(1)).join('/')} deg, shift ${q.slice(3).map((a) => (a * 100).toFixed(1)).join('/')} cm)`)
+    }
+
     /* Joints */
     const shoulder = endCentre(humPos, true)
     const elbowH = endCentre(humPos, false)
@@ -526,9 +627,28 @@ async function addBodyParts3D(dir) {
     }
     const straight = add(shoulder, mul(sub(wrist, shoulder), lh / (lh + lf)))
     const elbow = m ? [c[0] / m, ey, c[1] / m] : straight
-    const hum = place(humPos, shoulder, elbowH, shoulder, elbow)
-    const fore = place(forePos, elbowF, wristF, elbow, wrist)
-    console.log(`arm joints ${sign > 0 ? 'left' : 'right'}: elbow ${elbow.map((v) => v.toFixed(3)).join(', ')}, humerus ${lh.toFixed(3)} -> ${len(sub(elbow, shoulder)).toFixed(3)} m, forearm ${lf.toFixed(3)} -> ${len(sub(wrist, elbow)).toFixed(3)} m`)
+    /* Then the elbow is moved (up to 3 cm across, 2 cm up/down) to where the most upper-arm and forearm bone lies inside the skin */
+    const tryElbow = (e) => [place(humPos, shoulder, elbowH, shoulder, e), place(forePos, elbowF, wristF, e, wrist)]
+    let bestElbow = elbow
+    const elbowStart = insideShare(tryElbow(elbow))
+    let elbowScore = elbowStart
+    for (const step of [0.01, 0.005, 0.0025]) {
+      for (let pass = 0; pass < 2; pass++)
+        for (const axis of [0, 2, 1])
+          for (const dir of [-1, 1]) {
+            const e = [...bestElbow]
+            e[axis] += dir * step
+            if (Math.abs(e[0] - elbow[0]) > 0.03 || Math.abs(e[2] - elbow[2]) > 0.03 || Math.abs(e[1] - elbow[1]) > 0.02) continue
+            const sc = insideShare(tryElbow(e))
+            if (sc > elbowScore + 1e-6) {
+              elbowScore = sc
+              bestElbow = e
+            }
+          }
+    }
+    console.log(`elbow search ${sign > 0 ? 'left' : 'right'}: inside skin ${(elbowStart * 100).toFixed(0)} % -> ${(elbowScore * 100).toFixed(0)} %, moved ${sub(bestElbow, elbow).map((v) => (v * 100).toFixed(1)).join('/')} cm`)
+    const [hum, fore] = tryElbow(bestElbow)
+    console.log(`arm joints ${sign > 0 ? 'left' : 'right'}: elbow ${bestElbow.map((v) => v.toFixed(3)).join(', ')}, humerus ${lh.toFixed(3)} -> ${len(sub(elbow, shoulder)).toFixed(3)} m, forearm ${lf.toFixed(3)} -> ${len(sub(wrist, elbow)).toFixed(3)} m`)
     return { hum, fore, hand }
   }
   const hands = handBoneConcepts(dir)

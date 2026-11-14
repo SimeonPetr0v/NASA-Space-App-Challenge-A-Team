@@ -134,7 +134,7 @@ function Scene({ theme, statusByRegion, selected, onSelect, timelineDay, hovered
         timelineDay={timelineDay ?? null}
       />
       <MarkerProjector geometry={model.geometry} markers={markers} onPlaced={onPlaced} />
-      <CameraControls ref={setControls} minDistance={0.25} maxDistance={5} smoothTime={0.35} />
+      <CameraControls ref={setControls} minDistance={0.25} maxDistance={5} smoothTime={0.35} dollyToCursor />
     </>
   )
 }
