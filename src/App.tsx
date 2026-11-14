@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { INDICATORS } from '@/data/indicators'
 import { DEMO_READINGS } from '@/data/demo-readings'
 import { assess, worstStatus } from '@/engine/assess'
+import { BodyExplorer } from '@/features/body3d/BodyExplorer'
 import type { BloodPressure, ReadingValue } from '@/engine/types'
 
 /*
@@ -25,7 +26,7 @@ function App() {
   const overall = worstStatus(assessments)
 
   return (
-    <main className="mx-auto flex min-h-svh max-w-3xl flex-col gap-6 p-4 sm:p-8">
+    <main className="mx-auto flex min-h-svh max-w-6xl flex-col gap-6 p-4 sm:p-8">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Astro Health Monitor</h1>
@@ -40,6 +41,8 @@ function App() {
         <p className="text-muted-foreground text-sm">Overall</p>
         <StatusBadge status={overall} className="text-2xl" />
       </section>
+
+      <BodyExplorer readings={DEMO_READINGS} assessments={assessments} theme={night ? 'night' : 'day'} />
 
       <ul className="grid gap-3 sm:grid-cols-2">
         {DEMO_READINGS.map((reading, i) => {
