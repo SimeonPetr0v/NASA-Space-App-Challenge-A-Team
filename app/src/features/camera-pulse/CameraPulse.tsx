@@ -22,6 +22,7 @@ import { useTouchDevice } from "./useTouchDevice";
 */
 
 const SECONDS = 20;
+const SECONDS_WEBCAM = 30;
 type Phase = "idle" | "starting" | "measuring" | "done" | "error";
 type Lens = "front" | "back";
 const LENS_KEY = "ahm:ppg-camera";
@@ -156,9 +157,12 @@ function DeviceHint({ lens, computer }: { lens: Lens; computer: boolean }) {
 
 export function CameraPulse() {
   const { addReadings, simNow, theme } = useStore();
+  const touch = useTouchDevice();
+  /* Webcams give a weaker signal than a phone flash, so computers record longer */
+  const seconds = touch ? SECONDS : SECONDS_WEBCAM;
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState("");
-  const [left, setLeft] = useState(SECONDS);
+  const [left, setLeft] = useState(seconds);
   const [finger, setFinger] = useState(false);
   const [wave, setWave] = useState<number[]>([]);
   const [result, setResult] = useState<{
@@ -166,7 +170,6 @@ export function CameraPulse() {
     reliable: boolean;
   } | null>(null);
   const [saved, setSaved] = useState(false);
-  const touch = useTouchDevice();
   const [chosen, setLensState] = useState<Lens>(readLens);
   const lens: Lens = touch ? chosen : "front";
   const camName = touch ? `${lens} camera` : "webcam";
@@ -216,7 +219,7 @@ export function CameraPulse() {
     setSaved(false);
     setWave([]);
     setFinger(false);
-    setLeft(SECONDS);
+    setLeft(seconds);
     setPhase("starting");
     try {
       const s = await navigator.mediaDevices.getUserMedia({
@@ -259,17 +262,26 @@ export function CameraPulse() {
       const samples: Sample[] = [];
       let begin = 0;
       setPhase("measuring");
+      let lastFrame = -1;
       const tick = () => {
+        /* Count each camera frame once: the screen refreshes faster than a webcam delivers frames */
+        if (v.currentTime === lastFrame) {
+          raf.current = requestAnimationFrame(tick);
+          return;
+        }
+        lastFrame = v.currentTime;
         ctx.drawImage(v, 0, 0, 40, 30);
         const d = ctx.getImageData(0, 0, 40, 30).data;
         let r = 0;
         let g = 0;
+        let b = 0;
         for (let i = 0; i < d.length; i += 4) {
           r += d[i];
           g += d[i + 1];
+          b += d[i + 2];
         }
         const n = d.length / 4;
-        const sample = { t: performance.now(), red: r / n, green: g / n };
+        const sample = { t: performance.now(), red: r / n, green: g / n, blue: b / n };
         const on = fingerOnLens(sample);
         setFinger(on);
         if (on) {
@@ -282,8 +294,8 @@ export function CameraPulse() {
           samples.length = 0;
         }
         const elapsed = begin ? (sample.t - begin) / 1000 : 0;
-        setLeft(Math.max(0, Math.ceil(SECONDS - elapsed)));
-        if (elapsed >= SECONDS) {
+        setLeft(Math.max(0, Math.ceil(seconds - elapsed)));
+        if (elapsed >= seconds) {
           stop();
           setResult(estimateBpm(samples));
           setPhase("done");
@@ -317,7 +329,7 @@ export function CameraPulse() {
   const status = result ? INDICATORS.hr.classify(result.bpm) : "no-data";
   const night = theme === "night";
   const lit = lens === "front";
-  const progress = finger ? (SECONDS - left) / SECONDS : 0;
+  const progress = finger ? (seconds - left) / seconds : 0;
 
   return (
     <Panel aria-labelledby="ppg-title">
@@ -436,7 +448,7 @@ export function CameraPulse() {
                       Turn the screen brightness up. The screen lights up your
                       finger.
                     </li>
-                    <li>Keep your hand still for {SECONDS} seconds.</li>
+                    <li>Keep your hand still for {seconds} seconds.</li>
                   </>
                 ) : lens === "front" ? (
                   <>
@@ -446,7 +458,7 @@ export function CameraPulse() {
                       screen) with your fingertip.
                     </li>
                     <li>
-                      Keep still for {SECONDS} seconds. The screen lights up
+                      Keep still for {seconds} seconds. The screen lights up
                       your finger.
                     </li>
                   </>
@@ -460,7 +472,7 @@ export function CameraPulse() {
                       fingertip.
                     </li>
                     <li>
-                      Keep still for {SECONDS} seconds. The flash lights up your
+                      Keep still for {seconds} seconds. The flash lights up your
                       finger where the device allows it.
                     </li>
                   </>
