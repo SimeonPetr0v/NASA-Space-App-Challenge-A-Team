@@ -134,7 +134,7 @@ function Scene({ theme, statusByRegion, selected, onSelect, timelineDay, hovered
         timelineDay={timelineDay ?? null}
       />
       <MarkerProjector geometry={model.geometry} markers={markers} onPlaced={onPlaced} />
-      <CameraControls ref={setControls} minDistance={0.25} maxDistance={5} smoothTime={0.35} />
+      <CameraControls ref={setControls} minDistance={0.25} maxDistance={5} smoothTime={0.35} dollyToCursor />
     </>
   )
 }
@@ -229,8 +229,8 @@ export default function Body3D(props: Body3DProps) {
               >
                 <motion.span
                   className={`block size-2 rounded-full ring-2 ring-[var(--card)] ${meta.rule}`}
-                  initial={{ scale: 0 }}
-                  animate={{ scale: placed && !hidden ? (hot ? 1.5 : 1) : 0 }}
+                  initial={{ scale: 0.6, opacity: 0 }}
+                  animate={{ scale: placed && !hidden ? (hot ? 1.5 : 1) : 0.6, opacity: placed && !hidden ? 1 : 0 }}
                   transition={{ type: 'spring', stiffness: 400, damping: 22, delay: placed ? i * 0.09 : 0 }}
                 />
               </span>
@@ -246,7 +246,7 @@ export default function Body3D(props: Body3DProps) {
                 onBlur={() => setHovered(null)}
                 aria-pressed={active}
                 aria-label={`${r.label}, ${WORD[status]}`}
-                className={`bg-card/95 text-card-foreground absolute top-0 left-0 flex h-7 items-center gap-1.5 rounded-sm border px-2 text-[10px] font-semibold tracking-[0.08em] whitespace-nowrap uppercase shadow-[var(--shadow-card)] backdrop-blur ${hot ? 'border-foreground' : 'border-border-strong'} ${hidden ? 'pointer-events-none' : 'pointer-events-auto'}`}
+                className={`bg-card/95 text-card-foreground absolute top-0 left-0 flex h-7 items-center after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] gap-1.5 rounded-sm border px-2 text-[10px] font-semibold tracking-[0.08em] whitespace-nowrap uppercase shadow-[var(--shadow-card)] backdrop-blur ${hot ? 'border-foreground' : 'border-border-strong'} ${hidden ? 'pointer-events-none' : 'pointer-events-auto'}`}
                 style={{ visibility: 'hidden' }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: placed && !hidden ? 1 : 0 }}

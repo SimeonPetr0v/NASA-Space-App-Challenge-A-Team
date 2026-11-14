@@ -72,7 +72,7 @@ function Flight({ t, onDone }: { t: Transmission; onDone: () => void }) {
       transition={{ duration: 0.35 }}
       onClick={() => arrived && onDone()}
     >
-      <svg viewBox="0 0 1200 560" preserveAspectRatio="xMidYMid meet" className="h-[60vh] w-full flex-none sm:flex-1" aria-hidden="true">
+      <svg viewBox="0 0 1200 560" preserveAspectRatio="xMidYMid meet" className="h-[min(58svh,560px)] w-full flex-none" aria-hidden="true">
         <defs>
           <radialGradient id="tx-earth-glow">
             <stop offset="0%" stopColor="var(--signal)" stopOpacity="0.6" />
@@ -140,7 +140,7 @@ function Flight({ t, onDone }: { t: Transmission; onDone: () => void }) {
         </g>
       </svg>
 
-      <div className="mx-auto w-full max-w-xl px-6 pb-12 text-center" aria-live="polite">
+      <div className="mx-auto flex w-full max-w-xl flex-1 flex-col justify-start overflow-y-auto px-6 pt-2 pb-[max(env(safe-area-inset-bottom),2rem)] text-center" aria-live="polite">
         <AnimatePresence mode="wait">
           {!arrived ? (
             <motion.div key="go" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.3 }}>

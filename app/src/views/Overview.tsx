@@ -282,6 +282,7 @@ export function Overview() {
   const { theme, mode, delaySec } = useStore()
   return (
     <Page className="grid grid-cols-[minmax(0,1fr)] gap-8 pt-6 pb-16">
+      <h1 className="sr-only">Overview: crew health status</h1>
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
         <MissionTrack mode={mode} delaySec={delaySec} />
         {FEATURES.scheduleReminders && <ScheduleChip />}
@@ -303,14 +304,14 @@ export function Overview() {
         <StatusSummary />
       </section>
       {(FEATURES.trendWarnings || FEATURES.radiation) && (
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
           {FEATURES.trendWarnings && <TrendWatch />}
           {FEATURES.radiation && <RadiationBudget />}
         </div>
       )}
       <Panel aria-labelledby="body-title">
         <PanelHeader id="body-title" title="Body systems" meta="Select a system to see what spaceflight does to it" />
-        <BodyExplorer readings={readings} assessments={assessments} theme={theme} />
+        <BodyExplorer readings={readings} assessments={assessments} theme={theme === 'night' ? 'night' : 'day'} />
       </Panel>
       <ReadingsTable />
     </Page>

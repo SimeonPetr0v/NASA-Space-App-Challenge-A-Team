@@ -1,7 +1,8 @@
 import { AnimatePresence, MotionConfig, motion } from 'motion/react'
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { TransmitOverlay } from '@/components/TransmitOverlay'
 import { AppShell } from '@/shell/AppShell'
+import { playIntro } from '@/shell/intro'
 import { useRoute } from '@/state/route'
 import { StoreProvider, useStore } from '@/state/store'
 import { EarthLink } from '@/views/EarthLink'
@@ -12,16 +13,23 @@ import { NightView } from '@/views/NightView'
 import { FEATURES } from '@/config/features'
 import { CrewBoard } from '@/features/crew-board/CrewBoard'
 import { DemoPlayer } from '@/features/demo/DemoPlayer'
+import { SolarNav } from '@/features/solar-nav/SolarNav'
 import { Overview } from '@/views/Overview'
 import { Trends } from '@/views/Trends'
+
+const TotPage = lazy(() => import('@/features/tot/TotPage').then((m) => ({ default: m.TotPage })))
 
 function Screens() {
   const { route, param } = useRoute()
   const { theme } = useStore()
 
   useEffect(() => {
+    playIntro()
+  }, [])
+
+  useEffect(() => {
     document.documentElement.dataset.theme = theme
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'night' ? '#1a120d' : '#ffffff')
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'night' ? '#1a120d' : theme === 'dark' ? '#16191f' : '#f4f1ea')
   }, [theme])
 
   return (
@@ -43,11 +51,19 @@ function Screens() {
                   {route === 'brief' && <Brief />}
                   {route === 'sleep' && <NightView />}
                   {route === 'crew' && (FEATURES.crewBoard ? <CrewBoard /> : <Overview />)}
+                  {route === 'tot' && (FEATURES.tot ? (
+                    <Suspense fallback={<p className="text-muted-foreground p-8 text-sm">Loading TOT…</p>}>
+                      <TotPage />
+                    </Suspense>
+                  ) : (
+                    <Overview />
+                  ))}
                 </motion.div>
               </AnimatePresence>
       </AppShell>
       <TransmitOverlay />
       {FEATURES.playDemo && <DemoPlayer />}
+      {FEATURES.solarNav && <SolarNav route={route} />}
     </>
   )
 }

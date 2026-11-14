@@ -19,8 +19,8 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
       },
       manifest: {
-        name: 'Astro Health Monitor',
-        short_name: 'Astro Health',
+        name: 'Khonsu · Astronaut health',
+        short_name: 'Khonsu',
         description: 'Self-assessment health monitor for astronauts on long-duration missions.',
         theme_color: '#ffffff',
         background_color: '#f6f7f9',

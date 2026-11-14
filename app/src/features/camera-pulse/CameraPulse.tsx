@@ -9,7 +9,8 @@ import { Action } from "@/components/ui/action";
 import { INDICATORS } from "@/data/indicators";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/state/store";
-import { estimateBpm, fingerOnLens, pulseSignal, type Sample } from "./ppg";
+import { estimateBpm, fingerOnLens, type Sample } from "./ppg";
+import { PulseTrace, type TraceFeed } from "./PulseTrace";
 import { useTouchDevice } from "./useTouchDevice";
 
 /*
@@ -22,6 +23,7 @@ import { useTouchDevice } from "./useTouchDevice";
 */
 
 const SECONDS = 20;
+const SECONDS_WEBCAM = 30;
 type Phase = "idle" | "starting" | "measuring" | "done" | "error";
 type Lens = "front" | "back";
 const LENS_KEY = "ahm:ppg-camera";
@@ -156,17 +158,18 @@ function DeviceHint({ lens, computer }: { lens: Lens; computer: boolean }) {
 
 export function CameraPulse() {
   const { addReadings, simNow, theme } = useStore();
+  const touch = useTouchDevice();
+  /* Webcams give a weaker signal than a phone flash, so computers record longer */
+  const seconds = touch ? SECONDS : SECONDS_WEBCAM;
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState("");
-  const [left, setLeft] = useState(SECONDS);
+  const [left, setLeft] = useState(seconds);
   const [finger, setFinger] = useState(false);
-  const [wave, setWave] = useState<number[]>([]);
   const [result, setResult] = useState<{
     bpm: number;
     reliable: boolean;
   } | null>(null);
   const [saved, setSaved] = useState(false);
-  const touch = useTouchDevice();
   const [chosen, setLensState] = useState<Lens>(readLens);
   const lens: Lens = touch ? chosen : "front";
   const camName = touch ? `${lens} camera` : "webcam";
@@ -182,9 +185,13 @@ export function CameraPulse() {
   const stream = useRef<MediaStream | null>(null);
   const wake = useRef<{ release: () => Promise<void> } | null>(null);
   const raf = useRef(0);
+  const viaFrames = useRef(false);
+  const trace = useRef<TraceFeed | null>(null);
 
   const stop = () => {
     cancelAnimationFrame(raf.current);
+    if (viaFrames.current)
+      (video.current as HTMLVideoElement & { cancelVideoFrameCallback?: (h: number) => void })?.cancelVideoFrameCallback?.(raf.current);
     stream.current?.getTracks().forEach((t) => t.stop());
     stream.current = null;
     wake.current?.release().catch(() => undefined);
@@ -214,9 +221,9 @@ export function CameraPulse() {
     setError("");
     setResult(null);
     setSaved(false);
-    setWave([]);
+    trace.current?.clear();
     setFinger(false);
-    setLeft(SECONDS);
+    setLeft(seconds);
     setPhase("starting");
     try {
       const s = await navigator.mediaDevices.getUserMedia({
@@ -259,39 +266,58 @@ export function CameraPulse() {
       const samples: Sample[] = [];
       let begin = 0;
       setPhase("measuring");
+      /*
+        One sample per camera frame: requestVideoFrameCallback fires once for
+        every frame the camera delivers (webcams often give only 15 a second).
+        Browsers without it fall back to the screen refresh.
+      */
+      const rv = v as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
+      viaFrames.current = typeof rv.requestVideoFrameCallback === "function";
+      const next = () => {
+        raf.current = viaFrames.current ? rv.requestVideoFrameCallback!(tick) : requestAnimationFrame(tick);
+      };
+      /* A finger that slips off for a moment does not restart the recording; off for over 1 s does */
+      let offSince = 0;
       const tick = () => {
         ctx.drawImage(v, 0, 0, 40, 30);
         const d = ctx.getImageData(0, 0, 40, 30).data;
         let r = 0;
         let g = 0;
+        let b = 0;
         for (let i = 0; i < d.length; i += 4) {
           r += d[i];
           g += d[i + 1];
+          b += d[i + 2];
         }
         const n = d.length / 4;
-        const sample = { t: performance.now(), red: r / n, green: g / n };
+        const sample = { t: performance.now(), red: r / n, green: g / n, blue: b / n };
         const on = fingerOnLens(sample);
-        setFinger(on);
         if (on) {
+          offSince = 0;
+          setFinger(true);
           if (!begin) begin = sample.t;
           samples.push(sample);
-          if (samples.length % 3 === 0)
-            setWave(pulseSignal(samples.slice(-150)).slice(-90));
+          trace.current?.push(sample.t, sample.red, sample.green);
         } else {
-          begin = 0;
-          samples.length = 0;
+          if (!offSince) offSince = sample.t;
+          if (sample.t - offSince > 1000) {
+            setFinger(false);
+            begin = 0;
+            samples.length = 0;
+            trace.current?.clear();
+          }
         }
         const elapsed = begin ? (sample.t - begin) / 1000 : 0;
-        setLeft(Math.max(0, Math.ceil(SECONDS - elapsed)));
-        if (elapsed >= SECONDS) {
+        setLeft(Math.max(0, Math.ceil(seconds - elapsed)));
+        if (elapsed >= seconds) {
           stop();
           setResult(estimateBpm(samples));
           setPhase("done");
           return;
         }
-        raf.current = requestAnimationFrame(tick);
+        next();
       };
-      raf.current = requestAnimationFrame(tick);
+      next();
     } catch {
       stop();
       setError(
@@ -306,18 +332,10 @@ export function CameraPulse() {
     setPhase("idle");
   };
 
-  const lo = Math.min(...wave, 0);
-  const hi = Math.max(...wave, 0);
-  const pts = wave
-    .map(
-      (v, i) =>
-        `${(i / 89) * 300},${60 - ((v - lo) / (hi - lo || 1)) * 52 - 4}`,
-    )
-    .join(" ");
   const status = result ? INDICATORS.hr.classify(result.bpm) : "no-data";
   const night = theme === "night";
   const lit = lens === "front";
-  const progress = finger ? (SECONDS - left) / SECONDS : 0;
+  const progress = finger ? (seconds - left) / seconds : 0;
 
   return (
     <Panel aria-labelledby="ppg-title">
@@ -326,11 +344,11 @@ export function CameraPulse() {
         title="Heart rate from the camera"
         meta="Estimate, not a medical device"
       />
-      <video ref={video} playsInline muted className="hidden" />
+      <video ref={video} playsInline muted aria-hidden="true" className="pointer-events-none fixed top-0 left-0 size-px opacity-0" />
       <div className="grid gap-4 p-4 sm:p-5">
         {phase === "done" ? (
           <div
-            className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center"
+            className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-[auto_1fr] sm:items-center"
             aria-live="polite"
           >
             {result ? (
@@ -397,7 +415,7 @@ export function CameraPulse() {
             </div>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-[auto_1fr] sm:items-center">
             <DeviceHint lens={lens} computer={!touch} />
             <div className="grid gap-3">
               {touch && (
@@ -436,7 +454,7 @@ export function CameraPulse() {
                       Turn the screen brightness up. The screen lights up your
                       finger.
                     </li>
-                    <li>Keep your hand still for {SECONDS} seconds.</li>
+                    <li>Keep your hand still for {seconds} seconds.</li>
                   </>
                 ) : lens === "front" ? (
                   <>
@@ -446,7 +464,7 @@ export function CameraPulse() {
                       screen) with your fingertip.
                     </li>
                     <li>
-                      Keep still for {SECONDS} seconds. The screen lights up
+                      Keep still for {seconds} seconds. The screen lights up
                       your finger.
                     </li>
                   </>
@@ -460,7 +478,7 @@ export function CameraPulse() {
                       fingertip.
                     </li>
                     <li>
-                      Keep still for {SECONDS} seconds. The flash lights up your
+                      Keep still for {seconds} seconds. The flash lights up your
                       finger where the device allows it.
                     </li>
                   </>
@@ -572,29 +590,7 @@ export function CameraPulse() {
                         ? "Good. Keep still…"
                         : `Cover the ${camName} with your fingertip`}
                   </p>
-                  <svg
-                    viewBox="0 0 300 64"
-                    className="h-16 w-full"
-                    aria-hidden="true"
-                  >
-                    <line
-                      x1="0"
-                      y1="32"
-                      x2="300"
-                      y2="32"
-                      stroke="currentColor"
-                      strokeOpacity="0.12"
-                    />
-                    {wave.length > 2 && (
-                      <polyline
-                        points={pts}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2.5}
-                        strokeLinejoin="round"
-                      />
-                    )}
-                  </svg>
+                  <PulseTrace feedRef={trace} />
                   {!finger && phase === "measuring" && (
                     <p className="text-center text-sm opacity-75 landscape:text-left">
                       {lit

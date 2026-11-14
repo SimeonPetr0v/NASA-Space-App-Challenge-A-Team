@@ -105,7 +105,7 @@ export function WhyItMatters() {
         <PanelHeader id="why-title" title="Why it matters: NASA’s five questions" meta="Answered from the app’s own data and sources" />
         <ol className="divide-border divide-y">
           {questions.map((x, i) => (
-            <li key={x.q} className="grid gap-2 p-4 text-sm sm:grid-cols-[2.5rem_16rem_1fr] sm:gap-6 sm:p-5">
+            <li key={x.q} className="grid grid-cols-[minmax(0,1fr)] gap-2 p-4 text-sm sm:grid-cols-[2.5rem_16rem_1fr] sm:gap-6 sm:p-5">
               <p className="num text-muted-foreground">0{i + 1}</p>
               <p className="font-semibold">{x.q}</p>
               <div className="grid gap-2">

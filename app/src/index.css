@@ -1,17 +1,23 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/oxanium";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
 @import "./styles/tokens.css";
-@import "@fontsource/ibm-plex-sans-condensed/500.css";
-@import "@fontsource/ibm-plex-sans-condensed/600.css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
     --font-heading: var(--font-sans);
-    --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
-    --font-numeric: 'IBM Plex Sans Condensed', 'Geist Variable', ui-sans-serif, sans-serif;
+    --font-sans: 'Space Grotesk Variable', 'Bahnschrift', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Oxanium Variable', 'Bahnschrift', 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', monospace;
+    --font-numeric: 'Space Grotesk Variable', 'Bahnschrift', ui-sans-serif, sans-serif;
+    --color-teal: var(--teal);
+    --color-solar: var(--solar);
+    --color-solar-soft: var(--solar-soft);
     --color-status-ok: var(--status-ok);
     --color-status-caution: var(--status-caution);
     --color-status-danger: var(--status-danger);
@@ -64,13 +70,21 @@
 }
 
 @layer base {
+  /* A grid with no column setting gets one column that can shrink, so long content never widens the page on phones */
+  .grid:not([class*="grid-cols"]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
   html {
     -webkit-text-size-adjust: 100%;
   }
   body {
-    font-feature-settings: 'cv11', 'ss01';
     -webkit-font-smoothing: antialiased;
     font-size: 1rem;
+    letter-spacing: -0.005em;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
   }
   * {
     @apply border-border outline-ring/50;
@@ -85,6 +99,16 @@
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
+  /* Browser surfaces carry the palette too: selection, caret, form accents, scrollbars */
+  ::selection {
+    background: color-mix(in oklch, var(--teal) 28%, transparent);
+    color: var(--foreground);
+  }
+  html {
+    accent-color: var(--primary);
+    caret-color: var(--primary);
+    scrollbar-color: var(--border-strong) transparent;
+  }
 }
 
 @layer components {
@@ -97,15 +121,32 @@
   }
   /* Small sentence-case label for column heads and section labels */
   .label {
-    font-size: 0.75rem;
+    font-family: var(--font-display);
+    font-size: 0.6875rem;
     line-height: 1rem;
-    font-weight: 600;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
   }
   .panel {
+    position: relative;
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     box-shadow: var(--shadow-card);
+  }
+  /* A short teal tick on the top edge of each card: an instrument-panel detail */
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 1.25rem;
+    width: 1.75rem;
+    height: 2px;
+    border-radius: 0 0 2px 2px;
+    background: var(--teal);
+    opacity: 0.7;
+    pointer-events: none;
   }
 }
 
@@ -113,9 +154,8 @@
   /* Deep-space gradient used by the hero, the marquee and the closing band */
   .bg-space {
     background:
-      radial-gradient(120% 90% at 85% 10%, color-mix(in oklch, var(--space-3) 70%, transparent), transparent 60%),
-      radial-gradient(90% 80% at 10% 100%, color-mix(in oklch, var(--space-2) 85%, transparent), transparent 65%),
-      linear-gradient(160deg, var(--space-1), color-mix(in oklch, var(--space-1) 60%, var(--space-2)));
+      radial-gradient(70% 120% at 100% 0%, color-mix(in oklch, var(--space-3) 45%, transparent), transparent 70%),
+      linear-gradient(165deg, var(--space-1), color-mix(in oklch, var(--space-1) 70%, var(--space-2)));
     color: var(--space-foreground);
   }
   .bg-space-band {
@@ -194,4 +234,29 @@
 :root[data-theme='night'] .photon-pulse { animation-duration: 2.4s; }
 :root[data-theme='night'] .night-warm {
   filter: sepia(0.9) saturate(0.75) hue-rotate(-12deg) brightness(0.72);
+}
+
+/* Theme change: the new theme wipes in from the left with a soft fade (src/shell/theme-transition.ts) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-new(root) {
+  animation: theme-wipe 700ms cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+@keyframes theme-wipe {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.6;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-new(root) {
+    animation: none;
+  }
 }
