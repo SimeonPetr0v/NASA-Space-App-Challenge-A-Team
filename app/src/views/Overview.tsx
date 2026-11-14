@@ -310,7 +310,7 @@ export function Overview() {
       )}
       <Panel aria-labelledby="body-title">
         <PanelHeader id="body-title" title="Body systems" meta="Select a system to see what spaceflight does to it" />
-        <BodyExplorer readings={readings} assessments={assessments} theme={theme} />
+        <BodyExplorer readings={readings} assessments={assessments} theme={theme === 'night' ? 'night' : 'day'} />
       </Panel>
       <ReadingsTable />
     </Page>

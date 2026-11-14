@@ -52,10 +52,11 @@
   padding: 0;
   cursor: pointer;
   pointer-events: auto;
-  background: radial-gradient(circle at 38% 40%, #fff7d6 0%, #ffd45a 28%, #ff9f1c 62%, #e8590c 100%);
+  background: radial-gradient(circle at 38% 40%, #fff6dc 0%, color-mix(in oklch, var(--solar) 70%, #ffe7a8) 30%, var(--solar) 66%, color-mix(in oklch, var(--solar) 75%, #b0461a) 100%);
   box-shadow:
-    0 0 24px 6px rgb(255 170 40 / 0.55),
-    0 0 70px 18px rgb(255 140 20 / 0.28);
+    0 0 0 1px color-mix(in oklch, var(--solar) 40%, transparent),
+    0 0 22px 4px color-mix(in oklch, var(--solar) 45%, transparent),
+    0 0 64px 16px color-mix(in oklch, var(--solar) 18%, transparent);
   transition:
     opacity 380ms var(--ease) var(--sun-delay, 0ms),
     box-shadow 380ms var(--ease) var(--sun-delay, 0ms),
@@ -74,7 +75,7 @@
   position: absolute;
   inset: -10px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgb(255 190 60 / 0.35) 40%, transparent 70%);
+  background: radial-gradient(circle, color-mix(in oklch, var(--solar) 30%, transparent) 40%, transparent 70%);
   animation: solar-corona 5s ease-in-out infinite;
   transition: opacity 380ms var(--ease) var(--sun-delay, 0ms);
 }
@@ -85,7 +86,7 @@
 }
 
 .solar-sun:focus-visible {
-  outline: 3px solid var(--ring, #4c8dff);
+  outline: 2px solid var(--ring);
   outline-offset: 6px;
 }
 
@@ -93,8 +94,8 @@
   opacity: 0.6;
   filter: saturate(0.75);
   box-shadow:
-    0 0 10px 2px rgb(255 170 40 / 0.3),
-    0 0 26px 6px rgb(255 140 20 / 0.12);
+    0 0 0 1px color-mix(in oklch, var(--solar) 30%, transparent),
+    0 0 10px 2px color-mix(in oklch, var(--solar) 25%, transparent);
 }
 
 .solar[data-open='true'] .solar-sun::after {
@@ -167,7 +168,7 @@
 }
 
 .solar-link:focus-visible {
-  box-shadow: 0 0 0 3px var(--ring, #4c8dff);
+  box-shadow: 0 0 0 2px var(--ring);
 }
 
 /* The planet face and the icon share the circle and crossfade */
@@ -189,7 +190,9 @@
   opacity: 0;
   background: var(--card);
   border: 1px solid var(--border-strong);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+  color: var(--foreground);
+  box-shadow: var(--shadow-pop);
+  transition: opacity 320ms var(--ease), border-color 150ms var(--ease), color 150ms var(--ease);
 }
 
 .solar-icon svg {
@@ -221,9 +224,15 @@
   transition-delay: 0ms;
 }
 
+.solar-link:hover .solar-icon,
+.solar-link:focus-visible .solar-icon {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
 .solar-link[aria-current='page'] .solar-icon {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px var(--primary), 0 6px 18px rgb(0 0 0 / 0.18);
+  box-shadow: 0 0 0 2px var(--primary), var(--shadow-pop);
 }
 
 /* Label to the left of the hovered or focused planet */
@@ -235,8 +244,11 @@
   border-radius: 4px;
   background: var(--foreground);
   color: var(--background);
-  font-size: 12px;
-  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
   white-space: nowrap;
   opacity: 0;
   transform: translate(4px, -50%);

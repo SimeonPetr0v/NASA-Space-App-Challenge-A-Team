@@ -24,7 +24,7 @@ function Screens() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme
-    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'night' ? '#1a120d' : '#ffffff')
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'night' ? '#1a120d' : theme === 'dark' ? '#16191f' : '#f4f1ea')
   }, [theme])
 
   return (

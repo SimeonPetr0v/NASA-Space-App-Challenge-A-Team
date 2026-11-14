@@ -25,7 +25,7 @@ type Persisted = {
   crewId: CrewId
   mode: MissionMode
   marsDelayMin: number
-  theme: 'day' | 'night'
+  theme: Theme
   messages: LinkMessage[]
   wakings: string[]
 }
@@ -53,6 +53,8 @@ function load(): Persisted {
   }
 }
 
+/** light = 'day', graphite = 'dark', sleep shift = 'night' */
+export type Theme = 'day' | 'dark' | 'night'
 export type Transmission = { id: string; title: string; detail: string; delaySec: number; worst: Assessment['status'] }
 
 type Saved = { readings: Reading[]; checks: WellbeingCheck[]; error: string }
@@ -89,7 +91,7 @@ type Store = Persisted & {
   setCrew: (crewId: CrewId) => void
   setMode: (mode: MissionMode) => void
   setMarsDelayMin: (min: number) => void
-  setTheme: (theme: 'day' | 'night') => void
+  setTheme: (theme: Theme) => void
   setSpeed: (speed: number) => void
   sendReport: (assessments: Assessment[], readings: Reading[], note: string) => LinkMessage
   sendReply: (report: LinkMessage, template: string) => void

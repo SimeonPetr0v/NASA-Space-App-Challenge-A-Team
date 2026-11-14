@@ -4,15 +4,16 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#ffffff" />
+    <meta name="theme-color" content="#f4f1ea" />
     <meta name="description" content="Self-assessment health monitor for astronauts on long-duration missions." />
     <title>Khonsu · Astronaut health</title>
     <script>
-      /* Apply the saved theme before first paint so night mode never flashes bright day colours */
+      /* Apply the saved theme before first paint so dark and night modes never flash the light theme */
       try {
-        if (JSON.parse(localStorage.getItem('ahm:settings-v1') || '{}').theme === 'night') {
-          document.documentElement.dataset.theme = 'night'
-          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#1a120d')
+        var t = JSON.parse(localStorage.getItem('ahm:settings-v1') || '{}').theme
+        if (t === 'night' || t === 'dark') {
+          document.documentElement.dataset.theme = t
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', t === 'night' ? '#1a120d' : '#16191f')
         }
       } catch (e) {}
     </script>

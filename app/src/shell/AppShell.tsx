@@ -1,4 +1,4 @@
-import { Sparkles, Users, BedDouble, BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Moon, RadioTower, Rocket, Sun } from 'lucide-react'
+import { Sparkles, Users, BedDouble, BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, RadioTower, Rocket } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { CrewSwitcher } from '@/components/CrewSwitcher'
 import { FEATURES } from '@/config/features'
@@ -11,6 +11,8 @@ import { delayText, pad, utcTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { href, type Route } from '@/state/route'
 import { useSimNow, useStore } from '@/state/store'
+import { Backdrop } from './Backdrop'
+import { ThemeSwitch } from './ThemeSwitch'
 
 const NAV: { route: Route; label: string; icon: typeof LayoutDashboard }[] = [
   { route: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -145,8 +147,7 @@ function MissionSwitcher() {
 }
 
 function TopBar({ route }: { route: Route }) {
-  const { theme, setTheme, clock } = useStore()
-  const night = theme === 'night'
+  const { clock } = useStore()
   const now = useSimNow(1000)
   const met = Math.max(0, now - LAUNCH)
   const d = Math.floor(met / 86_400_000)
@@ -189,16 +190,7 @@ function TopBar({ route }: { route: Route }) {
           <CrewSwitcher />
           <MissionSwitcher />
         </div>
-        <button
-          type="button"
-          onClick={() => setTheme(night ? 'day' : 'night')}
-          className="border-border-strong text-muted-foreground hover:text-foreground hover:bg-muted flex size-11 items-center justify-center rounded-sm border md:size-9"
-          aria-label={night ? 'Night mode on. Switch to day mode' : 'Switch to sleep-shift night mode'}
-          aria-pressed={night}
-          title={night ? 'Day mode' : 'Sleep-shift night mode'}
-        >
-          {night ? <Sun className="size-4" strokeWidth={1.75} aria-hidden="true" /> : <Moon className="size-4" strokeWidth={1.75} aria-hidden="true" />}
-        </button>
+        <ThemeSwitch />
       </div>
     </header>
   )
@@ -233,7 +225,8 @@ function MobileNav({ route }: { route: Route }) {
 
 export function AppShell({ route, children }: { route: Route; children: ReactNode }) {
   return (
-    <div className="flex min-h-svh">
+    <div className="relative isolate flex min-h-svh">
+      <Backdrop />
       <a href="#main" className="bg-primary text-primary-foreground sr-only z-50 px-4 py-2 focus:not-sr-only focus:fixed focus:top-2 focus:left-2">
         Skip to content
       </a>
