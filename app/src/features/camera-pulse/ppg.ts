@@ -140,6 +140,49 @@ export function pulseSignal(samples: Sample[]) {
   return bestChannel(samples).y
 }
 
+/*
+  Live wave for the measuring screen: always the same signal during a
+  measurement (red + green, or green alone when red is saturated), so the
+  line does not jump between channels. Last 4 s at 30 Hz.
+*/
+export function liveWave(samples: Sample[]) {
+  if (samples.length < 4) return []
+  const g = band(resample(samples, 'green'))
+  const y = saturated(samples, 'red') ? g : band(resample(samples, 'red')).map((v, i) => v + g[i])
+  return y.slice(-HZ * 4)
+}
+
+/*
+  Fallback when the spectrum is not clear enough: count beats (local peaks at
+  least 0.3 s apart) in the best signal. Gives a rate only when the beat
+  intervals are fairly regular, and never marks it reliable.
+*/
+/** Largest spread of beat intervals (coefficient of variation) the fallback accepts */
+const BEAT_CV = 0.1
+
+function countBeats(y: number[]): number | null {
+  const s = y.slice(HZ)
+  if (s.length < HZ * 8) return null
+  const sd = Math.sqrt(s.reduce((a, v) => a + v * v, 0) / s.length)
+  const minGap = Math.round(HZ * (60 / MAX_BPM))
+  const peaks: number[] = []
+  for (let i = 2; i < s.length - 2; i++) {
+    if (s[i] > 0.4 * sd && s[i] >= s[i - 1] && s[i] >= s[i + 1] && s[i] > s[i - 2] && s[i] > s[i + 2]) {
+      if (peaks.length && i - peaks.at(-1)! < minGap) {
+        if (s[i] > s[peaks.at(-1)!]) peaks[peaks.length - 1] = i
+      } else peaks.push(i)
+    }
+  }
+  if (peaks.length < 6) return null
+  const gaps = peaks.slice(1).map((p, i) => (p - peaks[i]) / HZ).sort((a, b) => a - b)
+  const median = gaps[Math.floor(gaps.length / 2)]
+  const inner = gaps.slice(Math.floor(gaps.length * 0.2), Math.ceil(gaps.length * 0.8))
+  const mean = inner.reduce((a, g) => a + g, 0) / inner.length
+  const cv = Math.sqrt(inner.reduce((a, g) => a + (g - mean) ** 2, 0) / inner.length) / mean
+  const bpm = 60 / median
+  return cv < BEAT_CV && bpm >= MIN_BPM && bpm <= MAX_BPM ? bpm : null
+}
+
 /**
   A finger covering the camera, lit by the torch, the bright screen or room
   light, makes the image reddish and fairly dark; webcams often see only a
@@ -158,12 +201,16 @@ export function estimateBpm(samples: Sample[]): { bpm: number; reliable: boolean
   const span = (samples.at(-1)!.t - samples[0].t) / 1000
   if (span < 8) return null
   const { y, found } = bestChannel(samples)
-  if (!found || found.q < NO_PULSE) return null
   /* A real heartbeat keeps the same rate through the recording; noise peaks wander. Both halves must agree. */
   const halfLen = Math.floor(y.length / 2) + HZ
-  const first = rhythm(y.slice(0, halfLen))
-  const second = rhythm(y.slice(-halfLen))
-  if (!first || !second || Math.abs(first.bpm - found.bpm) > STEADY_BPM || Math.abs(second.bpm - found.bpm) > STEADY_BPM) return null
+  const first = found && rhythm(y.slice(0, halfLen))
+  const second = found && rhythm(y.slice(-halfLen))
+  const steady = !!found && !!first && !!second && Math.abs(first.bpm - found.bpm) <= STEADY_BPM && Math.abs(second.bpm - found.bpm) <= STEADY_BPM
+  if (!found || found.q < NO_PULSE || !steady) {
+    /* Not clear enough for the spectrum: try counting regular beats; an answer from here is never 'reliable' */
+    const beats = countBeats(y)
+    return beats ? { bpm: Math.round(beats), reliable: false, quality: Math.round((found?.q ?? 0) * 100) / 100 } : null
+  }
   const bpm = Math.round(found.bpm)
   return { bpm, reliable: found.q >= RELIABLE && bpm >= MIN_BPM && bpm <= MAX_BPM, quality: Math.round(found.q * 100) / 100 }
 }

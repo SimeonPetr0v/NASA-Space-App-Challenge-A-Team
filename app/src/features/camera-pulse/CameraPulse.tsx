@@ -9,7 +9,7 @@ import { Action } from "@/components/ui/action";
 import { INDICATORS } from "@/data/indicators";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/state/store";
-import { estimateBpm, fingerOnLens, pulseSignal, type Sample } from "./ppg";
+import { estimateBpm, fingerOnLens, liveWave, type Sample } from "./ppg";
 import { useTouchDevice } from "./useTouchDevice";
 
 /*
@@ -185,9 +185,13 @@ export function CameraPulse() {
   const stream = useRef<MediaStream | null>(null);
   const wake = useRef<{ release: () => Promise<void> } | null>(null);
   const raf = useRef(0);
+  const viaFrames = useRef(false);
+  const waveScale = useRef(0);
 
   const stop = () => {
     cancelAnimationFrame(raf.current);
+    if (viaFrames.current)
+      (video.current as HTMLVideoElement & { cancelVideoFrameCallback?: (h: number) => void })?.cancelVideoFrameCallback?.(raf.current);
     stream.current?.getTracks().forEach((t) => t.stop());
     stream.current = null;
     wake.current?.release().catch(() => undefined);
@@ -218,6 +222,7 @@ export function CameraPulse() {
     setResult(null);
     setSaved(false);
     setWave([]);
+    waveScale.current = 0;
     setFinger(false);
     setLeft(seconds);
     setPhase("starting");
@@ -262,14 +267,19 @@ export function CameraPulse() {
       const samples: Sample[] = [];
       let begin = 0;
       setPhase("measuring");
-      let lastFrame = -1;
+      /*
+        One sample per camera frame: requestVideoFrameCallback fires once for
+        every frame the camera delivers (webcams often give only 15 a second).
+        Browsers without it fall back to the screen refresh.
+      */
+      const rv = v as HTMLVideoElement & { requestVideoFrameCallback?: (cb: () => void) => number };
+      viaFrames.current = typeof rv.requestVideoFrameCallback === "function";
+      const next = () => {
+        raf.current = viaFrames.current ? rv.requestVideoFrameCallback!(tick) : requestAnimationFrame(tick);
+      };
+      /* A finger that slips off for a moment does not restart the recording; off for over 1 s does */
+      let offSince = 0;
       const tick = () => {
-        /* Count each camera frame once: the screen refreshes faster than a webcam delivers frames */
-        if (v.currentTime === lastFrame) {
-          raf.current = requestAnimationFrame(tick);
-          return;
-        }
-        lastFrame = v.currentTime;
         ctx.drawImage(v, 0, 0, 40, 30);
         const d = ctx.getImageData(0, 0, 40, 30).data;
         let r = 0;
@@ -283,15 +293,26 @@ export function CameraPulse() {
         const n = d.length / 4;
         const sample = { t: performance.now(), red: r / n, green: g / n, blue: b / n };
         const on = fingerOnLens(sample);
-        setFinger(on);
         if (on) {
+          offSince = 0;
+          setFinger(true);
           if (!begin) begin = sample.t;
           samples.push(sample);
-          if (samples.length % 3 === 0)
-            setWave(pulseSignal(samples.slice(-150)).slice(-90));
+          if (samples.length % 2 === 0) {
+            /* Scale grows at once but shrinks slowly, so the line does not jump */
+            const w = liveWave(samples.slice(-200));
+            const peak = w.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
+            waveScale.current = Math.max(peak, waveScale.current * 0.97);
+            setWave(w.map((x) => x / (waveScale.current || 1)));
+          }
         } else {
-          begin = 0;
-          samples.length = 0;
+          if (!offSince) offSince = sample.t;
+          if (sample.t - offSince > 1000) {
+            setFinger(false);
+            begin = 0;
+            samples.length = 0;
+            setWave([]);
+          }
         }
         const elapsed = begin ? (sample.t - begin) / 1000 : 0;
         setLeft(Math.max(0, Math.ceil(seconds - elapsed)));
@@ -301,9 +322,9 @@ export function CameraPulse() {
           setPhase("done");
           return;
         }
-        raf.current = requestAnimationFrame(tick);
+        next();
       };
-      raf.current = requestAnimationFrame(tick);
+      next();
     } catch {
       stop();
       setError(
@@ -318,12 +339,12 @@ export function CameraPulse() {
     setPhase("idle");
   };
 
-  const lo = Math.min(...wave, 0);
-  const hi = Math.max(...wave, 0);
+  /* Steady wave: fixed 4 s width, filled from the right (already scaled to -1..1 in the camera loop) */
+  const span = 120;
   const pts = wave
     .map(
       (v, i) =>
-        `${(i / 89) * 300},${60 - ((v - lo) / (hi - lo || 1)) * 52 - 4}`,
+        `${((span - wave.length + i) / (span - 1)) * 300},${32 - v * 26}`,
     )
     .join(" ");
   const status = result ? INDICATORS.hr.classify(result.bpm) : "no-data";
@@ -338,7 +359,7 @@ export function CameraPulse() {
         title="Heart rate from the camera"
         meta="Estimate, not a medical device"
       />
-      <video ref={video} playsInline muted className="hidden" />
+      <video ref={video} playsInline muted aria-hidden="true" className="pointer-events-none fixed top-0 left-0 size-px opacity-0" />
       <div className="grid gap-4 p-4 sm:p-5">
         {phase === "done" ? (
           <div
