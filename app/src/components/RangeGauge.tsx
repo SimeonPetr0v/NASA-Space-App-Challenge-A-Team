@@ -1,5 +1,7 @@
 import type { IndicatorDefinition } from '@/data/indicators'
 import type { Status } from '@/engine/types'
+import { motion } from 'motion/react'
+import { EASE_OUT } from '@/components/motion-config'
 import { cn } from '@/lib/utils'
 
 /*
@@ -47,7 +49,7 @@ export function RangeGauge({ def, value, baseline, className }: Props) {
   const pct = (v: number) => `${Math.min(100, Math.max(0, ((v - min) / (max - min)) * 100))}%`
 
   return (
-    <div className={cn('relative h-2.5 w-full', className)} aria-hidden="true">
+    <div className={cn('relative h-2.5 w-full [overflow-x:clip] [overflow-clip-margin:6px]', className)} aria-hidden="true">
       <div className="absolute inset-x-0 inset-y-0.5 flex gap-[2px] overflow-hidden rounded-full">
         {zones.map((z) => (
           <span
@@ -62,10 +64,18 @@ export function RangeGauge({ def, value, baseline, className }: Props) {
       {baseline !== undefined && (
         <span className="bg-muted-foreground absolute -top-0.5 h-1.5 w-[2px] -translate-x-1/2 rounded-full" style={{ left: pct(baseline) }} />
       )}
-      <span
-        className="bg-foreground absolute top-1/2 h-4 w-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full"
-        style={{ left: pct(value), boxShadow: '0 0 0 2px var(--card)' }}
-      />
+      <motion.span
+        className="absolute inset-0"
+        initial={{ x: '0%', opacity: 0 }}
+        whileInView={{ x: pct(value), opacity: 1 }}
+        viewport={{ once: true, amount: 1 }}
+        transition={{ duration: 0.9, ease: EASE_OUT, delay: 0.1 }}
+      >
+        <span
+          className="bg-foreground absolute top-1/2 left-0 h-4 w-[5px] -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{ boxShadow: '0 0 0 2px var(--card)' }}
+        />
+      </motion.span>
     </div>
   )
 }
