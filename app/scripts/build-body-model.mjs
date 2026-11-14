@@ -374,64 +374,111 @@ async function addBodyParts3D(dir) {
       hand.set(p, i)
     }
     /*
-      Then the fingers are matched to the skin fingers. The bone hand is
-      turned within the palm plane around the wrist (-35 to 35 degrees) and
-      its spread fingers are drawn together smoothly toward the tips (0-45 %),
-      and the combination that puts the most finger bone inside the outline
-      of the skin hand (its points projected onto the palm plane, 4 mm grid)
-      wins. Smooth and rigid, so no finger bends or breaks.
+      Then the bone hand is bent smoothly onto the skin hand (see below):
+      the BodyParts3D hand is posed with curled, fanned fingers while the
+      skin hand is flat and open, which no rigid turn can match.
     */
     {
       const [u, wv, nv] = sf.axes
       const top = sf.top
-      const CELL = 0.004
-      const occupied = new Set()
-      const cell = (a, b) => `${Math.floor(a / CELL)},${Math.floor(b / CELL)}`
-      for (let i = 0; i < skinHand.length; i += 3) {
-        const d = sub([skinHand[i], skinHand[i + 1], skinHand[i + 2]], top)
-        const a = dot(d, u)
-        const b = dot(d, wv)
-        for (let da = -2; da <= 2; da++) for (let db = -2; db <= 2; db++) occupied.add(cell(a + da * CELL, b + db * CELL))
-      }
-      const pts = []
-      for (let i = 0; i < hand.length; i += 3) {
-        const d = sub([hand[i], hand[i + 1], hand[i + 2]], top)
-        pts.push([dot(d, u), dot(d, wv), dot(d, nv)])
-      }
-      const L = Math.max(...pts.map((p) => p[0]))
-      const bs = pts.map((p) => p[1])
-      const bMid = (Math.min(...bs) + Math.max(...bs)) / 2
-      const move = (p, th, taper) => {
-        const t = Math.max(0, p[0]) / L
-        const b = bMid + (p[1] - bMid) * (1 - taper * t * t)
-        const c = Math.cos(th)
-        const s = Math.sin(th)
-        return [p[0] * c - b * s, p[0] * s + b * c]
-      }
-      const inside = (th, taper) => {
-        let hit = 0
-        let n = 0
-        for (const p of pts) {
-          if (p[0] < 0.35 * L) continue
-          n++
-          const [a, b] = move(p, th, taper)
-          if (occupied.has(cell(a, b))) hit++
+      const toPlane = (arr) => {
+        const out = []
+        for (let i = 0; i < arr.length; i += 3) {
+          const d = sub([arr[i], arr[i + 1], arr[i + 2]], top)
+          out.push([dot(d, u), dot(d, wv), dot(d, nv)])
         }
-        return hit / Math.max(1, n)
+        return out
       }
-      const before = inside(0, 0)
-      let best = { th: 0, taper: 0, s: before }
-      for (let deg = -35; deg <= 35; deg += 2.5) {
-        for (const taper of [0, 0.15, 0.3, 0.45]) {
-          const s = inside((deg * Math.PI) / 180, taper)
-          if (s > best.s + 1e-9 || (Math.abs(s - best.s) < 1e-9 && Math.abs(deg) < Math.abs((best.th * 180) / Math.PI))) best = { th: (deg * Math.PI) / 180, taper, s }
+      const skinPts = toPlane(skinHand)
+      const bonePts = toPlane(hand)
+      const lenOf = (pts) => pts.reduce((m, p) => Math.max(m, p[0]), 0)
+      const Ls = lenOf(skinPts)
+      const Lb = lenOf(bonePts)
+      /*
+        Along the hand's length (a), in 16 bands, the centre and half-width of
+        the skin hand and of the bone hand are measured across (b) and through
+        (c) the hand (5th-95th percentile). Smooth quadratic curves are fitted
+        to them, and every bone point is moved so its band's centre and width
+        match the skin's. One smooth curve over the whole length, so fingers
+        stay connected; it straightens the forward curl of the bone fingers
+        and lines them up with the skin fingers.
+      */
+      const BANDS = 16
+      const L = Math.max(Lb, 1e-6)
+      const bandStats = (pts) => {
+        const rows = []
+        for (let k = 0; k < BANDS; k++) {
+          const lo = (k / BANDS) * L
+          const hi = ((k + 1) / BANDS) * L
+          const f = pts.filter((q) => q[0] >= lo && q[0] < hi)
+          if (f.length < 8) continue
+          const pc = (axis, t) => {
+            const v = f.map((q) => q[axis]).sort((x, y) => x - y)
+            return v[Math.min(v.length - 1, Math.max(0, Math.round(t * (v.length - 1))))]
+          }
+          const b5 = pc(1, 0.05)
+          const b95 = pc(1, 0.95)
+          const c5 = pc(2, 0.05)
+          const c95 = pc(2, 0.95)
+          rows.push({ a: (lo + hi) / 2, n: f.length, cb: (b5 + b95) / 2, hb: (b95 - b5) / 2, cc: (c5 + c95) / 2, hc: (c95 - c5) / 2 })
         }
+        return rows
       }
-      pts.forEach((p, k) => {
-        const [a, b] = move(p, best.th, best.taper)
-        hand.set(add(add(add(top, mul(u, a)), mul(wv, b)), mul(nv, p[2])), k * 3)
+      /* Weighted least-squares quadratic y = k0 + k1 a + k2 a^2 */
+      const quad = (rows, key) => {
+        const S = Array(5).fill(0)
+        const T = Array(3).fill(0)
+        for (const r of rows) {
+          const w = Math.sqrt(r.n)
+          let ap = 1
+          for (let e = 0; e < 5; e++) {
+            S[e] += w * ap
+            if (e < 3) T[e] += w * ap * r[key]
+            ap *= r.a
+          }
+        }
+        const M = [
+          [S[0], S[1], S[2], T[0]],
+          [S[1], S[2], S[3], T[1]],
+          [S[2], S[3], S[4], T[2]],
+        ]
+        for (let i = 0; i < 3; i++) {
+          let piv = i
+          for (let j = i + 1; j < 3; j++) if (Math.abs(M[j][i]) > Math.abs(M[piv][i])) piv = j
+          ;[M[i], M[piv]] = [M[piv], M[i]]
+          for (let j = 0; j < 3; j++) {
+            if (j === i || !M[i][i]) continue
+            const f = M[j][i] / M[i][i]
+            for (let k = i; k < 4; k++) M[j][k] -= f * M[i][k]
+          }
+        }
+        const k = M.map((row, i) => (row[i] ? row[3] / row[i] : 0))
+        return (x) => k[0] + k[1] * x + k[2] * x * x
+      }
+      const skinRows = bandStats(skinPts.filter((q) => q[0] <= L))
+      const boneRows = bandStats(bonePts)
+      const sCb = quad(skinRows, 'cb')
+      const sHb = quad(skinRows, 'hb')
+      const sCc = quad(skinRows, 'cc')
+      const sHc = quad(skinRows, 'hc')
+      const bCb = quad(boneRows, 'cb')
+      const bHb = quad(boneRows, 'hb')
+      const bCc = quad(boneRows, 'cc')
+      const bHc = quad(boneRows, 'hc')
+      const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x))
+      const INSET_B = 0.006
+      const INSET_C = 0.005
+      bonePts.forEach((q, k) => {
+        const x = clamp(q[0], 0, L)
+        const kb = clamp((sHb(x) - INSET_B) / Math.max(1e-4, bHb(x)), 0.55, 1.1)
+        const kc = clamp((sHc(x) - INSET_C) / Math.max(1e-4, bHc(x)), 0.55, 1.1)
+        const b2 = sCb(x) + (q[1] - bCb(x)) * kb
+        const c2 = sCc(x) + (q[2] - bCc(x)) * kc
+        hand.set(add(add(add(top, mul(u, q[0])), mul(wv, b2)), mul(nv, c2)), k * 3)
       })
-      console.log(`finger fit ${sign > 0 ? 'left' : 'right'}: turn ${((best.th * 180) / Math.PI).toFixed(1)} deg, taper ${best.taper}, finger bone inside skin ${(before * 100).toFixed(0)} % -> ${(best.s * 100).toFixed(0)} %`)
+      let off = 0
+      for (const q of bonePts) if (q[0] > 0.5 * L) off++
+      console.log(`finger fit ${sign > 0 ? 'left' : 'right'}: bent along ${BANDS} bands (${skinRows.length} skin, ${boneRows.length} bone) onto the skin hand; ${off} finger points`)
     }
     console.log(`hand fit ${sign > 0 ? 'left' : 'right'}: scale ${fit.map((f) => f.k.toFixed(2)).join(' / ')}, skin axis ${sf.axes[0].map((v) => v.toFixed(2)).join(', ')}, bone axis ${bf.axes[0].map((v) => v.toFixed(2)).join(', ')}`)
 

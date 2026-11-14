@@ -141,18 +141,6 @@ export function pulseSignal(samples: Sample[]) {
 }
 
 /*
-  Live wave for the measuring screen: always the same signal during a
-  measurement (red + green, or green alone when red is saturated), so the
-  line does not jump between channels. Last 4 s at 30 Hz.
-*/
-export function liveWave(samples: Sample[]) {
-  if (samples.length < 4) return []
-  const g = band(resample(samples, 'green'))
-  const y = saturated(samples, 'red') ? g : band(resample(samples, 'red')).map((v, i) => v + g[i])
-  return y.slice(-HZ * 4)
-}
-
-/*
   Fallback when the spectrum is not clear enough: count beats (local peaks at
   least 0.3 s apart) in the best signal. Gives a rate only when the beat
   intervals are fairly regular, and never marks it reliable.

@@ -9,7 +9,8 @@ import { Action } from "@/components/ui/action";
 import { INDICATORS } from "@/data/indicators";
 import { cn } from "@/lib/utils";
 import { useStore } from "@/state/store";
-import { estimateBpm, fingerOnLens, liveWave, type Sample } from "./ppg";
+import { estimateBpm, fingerOnLens, type Sample } from "./ppg";
+import { PulseTrace, type TraceFeed } from "./PulseTrace";
 import { useTouchDevice } from "./useTouchDevice";
 
 /*
@@ -164,7 +165,6 @@ export function CameraPulse() {
   const [error, setError] = useState("");
   const [left, setLeft] = useState(seconds);
   const [finger, setFinger] = useState(false);
-  const [wave, setWave] = useState<number[]>([]);
   const [result, setResult] = useState<{
     bpm: number;
     reliable: boolean;
@@ -186,7 +186,7 @@ export function CameraPulse() {
   const wake = useRef<{ release: () => Promise<void> } | null>(null);
   const raf = useRef(0);
   const viaFrames = useRef(false);
-  const waveScale = useRef(0);
+  const trace = useRef<TraceFeed | null>(null);
 
   const stop = () => {
     cancelAnimationFrame(raf.current);
@@ -221,8 +221,7 @@ export function CameraPulse() {
     setError("");
     setResult(null);
     setSaved(false);
-    setWave([]);
-    waveScale.current = 0;
+    trace.current?.clear();
     setFinger(false);
     setLeft(seconds);
     setPhase("starting");
@@ -298,20 +297,14 @@ export function CameraPulse() {
           setFinger(true);
           if (!begin) begin = sample.t;
           samples.push(sample);
-          if (samples.length % 2 === 0) {
-            /* Scale grows at once but shrinks slowly, so the line does not jump */
-            const w = liveWave(samples.slice(-200));
-            const peak = w.reduce((m, x) => Math.max(m, Math.abs(x)), 0);
-            waveScale.current = Math.max(peak, waveScale.current * 0.97);
-            setWave(w.map((x) => x / (waveScale.current || 1)));
-          }
+          trace.current?.push(sample.t, sample.red, sample.green);
         } else {
           if (!offSince) offSince = sample.t;
           if (sample.t - offSince > 1000) {
             setFinger(false);
             begin = 0;
             samples.length = 0;
-            setWave([]);
+            trace.current?.clear();
           }
         }
         const elapsed = begin ? (sample.t - begin) / 1000 : 0;
@@ -339,14 +332,6 @@ export function CameraPulse() {
     setPhase("idle");
   };
 
-  /* Steady wave: fixed 4 s width, filled from the right (already scaled to -1..1 in the camera loop) */
-  const span = 120;
-  const pts = wave
-    .map(
-      (v, i) =>
-        `${((span - wave.length + i) / (span - 1)) * 300},${32 - v * 26}`,
-    )
-    .join(" ");
   const status = result ? INDICATORS.hr.classify(result.bpm) : "no-data";
   const night = theme === "night";
   const lit = lens === "front";
@@ -605,29 +590,7 @@ export function CameraPulse() {
                         ? "Good. Keep still…"
                         : `Cover the ${camName} with your fingertip`}
                   </p>
-                  <svg
-                    viewBox="0 0 300 64"
-                    className="h-16 w-full"
-                    aria-hidden="true"
-                  >
-                    <line
-                      x1="0"
-                      y1="32"
-                      x2="300"
-                      y2="32"
-                      stroke="currentColor"
-                      strokeOpacity="0.12"
-                    />
-                    {wave.length > 2 && (
-                      <polyline
-                        points={pts}
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={2.5}
-                        strokeLinejoin="round"
-                      />
-                    )}
-                  </svg>
+                  <PulseTrace feedRef={trace} />
                   {!finger && phase === "measuring" && (
                     <p className="text-center text-sm opacity-75 landscape:text-left">
                       {lit
