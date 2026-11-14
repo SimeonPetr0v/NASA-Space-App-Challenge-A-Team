@@ -1,5 +1,5 @@
 /*
-  Photoplethysmography (PPG) from a phone camera: each heartbeat pushes blood
+  Photoplethysmography (PPG) from the camera of a phone or tablet: each heartbeat pushes blood
   into the fingertip, which changes how much light passes through it. We take
   the mean red value of each frame, remove the slow drift, smooth it and count
   the peaks. Estimate only; not a medical device.
@@ -44,8 +44,11 @@ export function pulseSignal(samples: Sample[]) {
   return movingAverage(detrended, 5).map((v) => -v)
 }
 
-/** A finger covering the lens (ideally with the torch on) makes the image bright and red */
-export const fingerOnLens = (s: Sample) => s.red > 90 && s.red > s.green * 1.6
+/**
+  A finger covering the camera, lit by the torch (back) or the bright screen
+  (front), makes the image red: blood lets red light through and blocks green.
+*/
+export const fingerOnLens = (s: Sample) => s.red > 40 && s.red > s.green * 1.4
 
 export function estimateBpm(samples: Sample[]): { bpm: number; reliable: boolean } | null {
   const y = pulseSignal(samples)

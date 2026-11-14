@@ -146,9 +146,14 @@
 @keyframes thruster { 0%, 100% { opacity: 0.95; transform: scaleX(1); } 50% { opacity: 0.6; transform: scaleX(0.75); } }
 .thruster { transform-box: fill-box; transform-origin: right center; animation: thruster 0.18s linear infinite; }
 @keyframes photon-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.25); } }
+/* Camera pulse: finger moves onto the lens; target ring breathes */
+@keyframes ppg-finger { 0%, 15% { transform: translateY(-10px); opacity: 0; } 45%, 85% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(-10px); opacity: 0; } }
+.ppg-finger { animation: ppg-finger 2.8s cubic-bezier(0.23, 1, 0.32, 1) infinite; }
+@keyframes ppg-target { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
+.ppg-target { animation: ppg-target 1.6s ease-in-out infinite; }
 .photon-pulse { transform-box: fill-box; transform-origin: center; animation: photon-pulse 1.2s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .twinkle, .ecg, .signal-flow, .marquee, .orbit-travel, .earth-pulse, .nebula, .planet-spin, .ship-bob, .thruster, .photon-pulse { animation: none; }
+  .twinkle, .ecg, .signal-flow, .marquee, .orbit-travel, .earth-pulse, .nebula, .planet-spin, .ship-bob, .thruster, .photon-pulse, .ppg-finger, .ppg-target { animation: none; }
 }
 
 /* One quiet entrance for view changes */
