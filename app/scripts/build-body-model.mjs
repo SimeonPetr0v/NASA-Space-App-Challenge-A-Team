@@ -175,13 +175,7 @@ async function addBodyParts3D(dir) {
       }
     }
   }
-  /*
-    The rib cage is placed by the lungs, but the BodyParts3D chest is deeper
-    in front than ours, so the sternum and rib fronts came out through the
-    skin. Per 1 cm height slice, the front half of the rib cage (in front of
-    its middle) is pressed back so its front stays RIB_TISSUE behind the
-    chest skin; the back half does not move.
-  */
+  /* The rib cage is first placed by the lungs (BodyParts3D lungs onto ours) */
   const ribPos = mapBounds(toYUp(rib.positions, mirrorX), bpLungs, hraLungs)
   /*
     The lungs end well above the bottom of a real rib cage, so the cage is
@@ -214,46 +208,119 @@ async function addBodyParts3D(dir) {
     if (k > 1) for (let i = 1; i < ribPos.length; i += 3) if (ribPos[i] < pivot) ribPos[i] = pivot - (pivot - ribPos[i]) * k
     console.log(`rib cage: sternum top ${pivot.toFixed(3)} m, iliac crest ${crest.toFixed(3)} m, bottom ${rb.min[1].toFixed(3)} -> ${(pivot - (pivot - rb.min[1]) * Math.max(1, k)).toFixed(3)} m (x${k.toFixed(2)} below the sternum top)`)
   }
+  /*
+    Then the cage is fitted between the lungs and the skin, per 1 cm height
+    slice and per direction around the chest (SECTORS around the slice's
+    centre): ribs are moved in or out from the centre so the lungs stay
+    LUNG_GAP inside the ribs' outer edge and, in front and at the sides of
+    the chest (not where the arms are), the ribs stay RIB_TISSUE inside the
+    skin. If both cannot hold, the ribs go half way. The factors are
+    smoothed over neighbouring directions and heights so the cage keeps
+    its shape.
+  */
   {
+    const LUNG_GAP = 0.015
     const RIB_TISSUE = 0.016
+    const SECTORS = 24
+    const lungPts = []
+    for (const n of nodesOf("lungs")) {
+      const m = n.getWorldMatrix()
+      for (const p of n.getMesh().listPrimitives()) {
+        const a = p.getAttribute("POSITION")
+        const v = [0, 0, 0]
+        for (let i = 0; i < a.getCount(); i++) {
+          a.getElement(i, v)
+          lungPts.push(m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12], m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13], m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14])
+        }
+      }
+    }
     const rb = boundsOf(ribPos)
-    const zMid = (rb.min[2] + rb.max[2]) / 2
     const y0 = Math.floor(rb.min[1] * 100)
     const n = Math.floor(rb.max[1] * 100) - y0 + 1
-    const skinFront = Array(n).fill(-Infinity)
-    const ribFront = Array(n).fill(-Infinity)
-    for (let i = 0; i < hraSkinPts.length; i += 3) {
-      const k = Math.floor(hraSkinPts[i + 1] * 100) - y0
-      /* Front skin only; each point counts for its slice and the two next to it (the skin mesh is sparse) */
-      if (Math.abs(hraSkinPts[i]) >= 0.06 || hraSkinPts[i + 2] <= 0) continue
-      for (let j = Math.max(0, k - 1); j <= Math.min(n - 1, k + 1); j++) skinFront[j] = Math.max(skinFront[j], hraSkinPts[i + 2])
-    }
+    const slice = (y) => Math.floor(y * 100) - y0
+    /* Slice centre: middle of the rib points in x and z (within +-1 cm) */
+    const centre = Array.from({ length: n }, () => ({ x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity }))
     for (let i = 0; i < ribPos.length; i += 3) {
-      const k = Math.floor(ribPos[i + 1] * 100) - y0
-      ribFront[k] = Math.max(ribFront[k], ribPos[i + 2])
-    }
-    /* Squeeze factor per slice: lowest within +-1 cm, then averaged over +-2 cm so the cage stays smooth */
-    const raw = ribFront.map((f, k) => (f > zMid && Number.isFinite(skinFront[k]) ? Math.max(0.5, Math.min(1, (skinFront[k] - RIB_TISSUE - zMid) / (f - zMid))) : 1))
-    const squeeze = raw.map((_, k) => {
-      let m = 1
-      for (let j = Math.max(0, k - 1); j <= Math.min(n - 1, k + 1); j++) m = Math.min(m, raw[j])
-      return m
-    })
-    const smooth = squeeze.map((_, k) => {
-      let t = 0
-      let c = 0
-      for (let j = Math.max(0, k - 2); j <= Math.min(n - 1, k + 2); j++) {
-        t += squeeze[j]
-        c++
+      const k = slice(ribPos[i + 1])
+      for (let j = Math.max(0, k - 1); j <= Math.min(n - 1, k + 1); j++) {
+        const c = centre[j]
+        c.x0 = Math.min(c.x0, ribPos[i])
+        c.x1 = Math.max(c.x1, ribPos[i])
+        c.z0 = Math.min(c.z0, ribPos[i + 2])
+        c.z1 = Math.max(c.z1, ribPos[i + 2])
       }
-      return t / c
-    })
-    for (let i = 0; i < ribPos.length; i += 3) {
-      if (ribPos[i + 2] <= zMid) continue
-      const k = Math.floor(ribPos[i + 1] * 100) - y0
-      ribPos[i + 2] = zMid + (ribPos[i + 2] - zMid) * smooth[k]
     }
-    console.log(`rib cage front pressed back: depth x${Math.min(...smooth).toFixed(2)} at most`)
+    const cxz = centre.map((c) => [(c.x0 + c.x1) / 2, (c.z0 + c.z1) / 2])
+    const polar = (x, y, z, k) => {
+      const dx = x - cxz[k][0]
+      const dz = z - cxz[k][1]
+      const t = Math.atan2(dx, dz)
+      return { r: Math.hypot(dx, dz), s: (((t + Math.PI) / (2 * Math.PI)) * SECTORS) % SECTORS, front: Math.abs(t) < (70 * Math.PI) / 180 }
+    }
+    const grid = (v) => Array.from({ length: n }, () => Array(SECTORS).fill(v))
+    const ribR = grid(0)
+    const lungR = grid(0)
+    const skinR = grid(Infinity)
+    const each = (pts, f) => {
+      for (let i = 0; i < pts.length; i += 3) {
+        const k = slice(pts[i + 1])
+        if (k < 0 || k >= n) continue
+        const p = polar(pts[i], pts[i + 1], pts[i + 2], k)
+        f(k, Math.floor(p.s), p)
+      }
+    }
+    each(ribPos, (k, s, p) => (ribR[k][s] = Math.max(ribR[k][s], p.r)))
+    each(lungPts, (k, s, p) => (lungR[k][s] = Math.max(lungR[k][s], p.r)))
+    /* Skin: outermost torso skin point per front/side direction; the sparse mesh counts for neighbouring slices too */
+    const skinMax = grid(0)
+    for (let i = 0; i < hraSkinPts.length; i += 3) {
+      const k = slice(hraSkinPts[i + 1])
+      for (let j = Math.max(0, k - 1); j <= Math.min(n - 1, k + 1); j++) {
+        const p = polar(hraSkinPts[i], hraSkinPts[i + 1], hraSkinPts[i + 2], j)
+        if (!p.front || p.r > 0.22) continue
+        const s = Math.floor(p.s)
+        skinMax[j][s] = Math.max(skinMax[j][s], p.r)
+      }
+    }
+    for (let k = 0; k < n; k++) for (let s = 0; s < SECTORS; s++) if (skinMax[k][s] > 0) skinR[k][s] = skinMax[k][s]
+    const raw = grid(1)
+    let wider = 0
+    let narrower = 0
+    for (let k = 0; k < n; k++)
+      for (let s = 0; s < SECTORS; s++) {
+        if (!ribR[k][s]) continue
+        const lo = lungR[k][s] ? (lungR[k][s] + LUNG_GAP) / ribR[k][s] : 0
+        const hi = (skinR[k][s] - RIB_TISSUE) / ribR[k][s]
+        let f = Math.min(Math.max(1, lo), hi)
+        if (hi < lo) f = (lo + hi) / 2
+        raw[k][s] = Math.max(0.6, Math.min(1.5, f))
+      }
+    /* Smooth: +-1 direction, +-2 cm height */
+    const fac = grid(1)
+    for (let k = 0; k < n; k++)
+      for (let s = 0; s < SECTORS; s++) {
+        let t = 0
+        let c = 0
+        for (let j = Math.max(0, k - 2); j <= Math.min(n - 1, k + 2); j++)
+          for (let d = -1; d <= 1; d++) {
+            t += raw[j][(s + d + SECTORS) % SECTORS]
+            c++
+          }
+        fac[k][s] = t / c
+        if (ribR[k][s] && fac[k][s] > 1.005) wider++
+        if (ribR[k][s] && fac[k][s] < 0.995) narrower++
+      }
+    for (let i = 0; i < ribPos.length; i += 3) {
+      const k = Math.max(0, Math.min(n - 1, slice(ribPos[i + 1])))
+      const p = polar(ribPos[i], ribPos[i + 1], ribPos[i + 2], k)
+      /* Blend between the two nearest directions */
+      const s0 = Math.floor(p.s - 0.5 + SECTORS) % SECTORS
+      const w = p.s - 0.5 - Math.floor(p.s - 0.5)
+      const f = fac[k][s0] * (1 - w) + fac[k][(s0 + 1) % SECTORS] * w
+      ribPos[i] = cxz[k][0] + (ribPos[i] - cxz[k][0]) * f
+      ribPos[i + 2] = cxz[k][1] + (ribPos[i + 2] - cxz[k][1]) * f
+    }
+    console.log(`rib cage fitted between lungs and skin: ${wider} of ${n * SECTORS} slice directions moved out, ${narrower} in`)
   }
   addPart("ribcage", ribPos, rib.indices, "musculoskeletal", 22000)
 
