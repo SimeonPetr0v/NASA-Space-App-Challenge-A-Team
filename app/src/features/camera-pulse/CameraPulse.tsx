@@ -156,7 +156,8 @@ function DeviceHint({ lens, computer }: { lens: Lens; computer: boolean }) {
   );
 }
 
-export function CameraPulse() {
+/* onSaved: tells the Log form the new resting heart rate, so its field shows the measured value */
+export function CameraPulse({ onSaved }: { onSaved?: (bpm: number) => void } = {}) {
   const { addReadings, simNow, theme } = useStore();
   const touch = useTouchDevice();
   /* Webcams give a weaker signal than a phone flash, so computers record longer */
@@ -389,8 +390,10 @@ export function CameraPulse() {
                             source: "camera",
                           },
                         ])
-                      )
+                      ) {
                         setSaved(true);
+                        onSaved?.(result.bpm);
+                      }
                     }}
                   >
                     <HeartPulse aria-hidden="true" /> Save as resting heart rate

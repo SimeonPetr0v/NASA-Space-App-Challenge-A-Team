@@ -166,7 +166,7 @@ export function LogReading() {
           {storageError}
         </p>
       )}
-      {FEATURES.cameraPulse && <CameraPulse />}
+      {FEATURES.cameraPulse && <CameraPulse onSaved={(bpm) => setDraft((d) => ({ ...d, hr: String(bpm) }))} />}
       <Panel aria-labelledby="form-title">
         <PanelHeader id="form-title" title="New reading" meta="Untick anything you did not measure." />
         <form
