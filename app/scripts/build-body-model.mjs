@@ -163,7 +163,66 @@ async function addBodyParts3D(dir) {
 
   const rib = readGroup(dir, ["ids_FMA7480.txt"])
   const bpLungs = boundsOf(toYUp(lungs.positions, mirrorX))
-  addPart("ribcage", mapBounds(toYUp(rib.positions, mirrorX), bpLungs, hraLungs), rib.indices, "musculoskeletal", 22000)
+  const hraSkinPts = []
+  for (const n of nodesOf("whole-body")) {
+    const m = n.getWorldMatrix()
+    for (const p of n.getMesh().listPrimitives()) {
+      const a = p.getAttribute("POSITION")
+      const v = [0, 0, 0]
+      for (let i = 0; i < a.getCount(); i++) {
+        a.getElement(i, v)
+        hraSkinPts.push(m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12], m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13], m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14])
+      }
+    }
+  }
+  /*
+    The rib cage is placed by the lungs, but the BodyParts3D chest is deeper
+    in front than ours, so the sternum and rib fronts came out through the
+    skin. Per 1 cm height slice, the front half of the rib cage (in front of
+    its middle) is pressed back so its front stays RIB_TISSUE behind the
+    chest skin; the back half does not move.
+  */
+  const ribPos = mapBounds(toYUp(rib.positions, mirrorX), bpLungs, hraLungs)
+  {
+    const RIB_TISSUE = 0.012
+    const rb = boundsOf(ribPos)
+    const zMid = (rb.min[2] + rb.max[2]) / 2
+    const y0 = Math.floor(rb.min[1] * 100)
+    const n = Math.floor(rb.max[1] * 100) - y0 + 1
+    const skinFront = Array(n).fill(-Infinity)
+    const ribFront = Array(n).fill(-Infinity)
+    for (let i = 0; i < hraSkinPts.length; i += 3) {
+      const k = Math.floor(hraSkinPts[i + 1] * 100) - y0
+      if (k >= 0 && k < n && Math.abs(hraSkinPts[i]) < 0.06) skinFront[k] = Math.max(skinFront[k], hraSkinPts[i + 2])
+    }
+    for (let i = 0; i < ribPos.length; i += 3) {
+      const k = Math.floor(ribPos[i + 1] * 100) - y0
+      ribFront[k] = Math.max(ribFront[k], ribPos[i + 2])
+    }
+    /* Squeeze factor per slice: lowest within +-1 cm, then averaged over +-2 cm so the cage stays smooth */
+    const raw = ribFront.map((f, k) => (f > zMid && Number.isFinite(skinFront[k]) ? Math.min(1, (skinFront[k] - RIB_TISSUE - zMid) / (f - zMid)) : 1))
+    const squeeze = raw.map((_, k) => {
+      let m = 1
+      for (let j = Math.max(0, k - 1); j <= Math.min(n - 1, k + 1); j++) m = Math.min(m, raw[j])
+      return m
+    })
+    const smooth = squeeze.map((_, k) => {
+      let t = 0
+      let c = 0
+      for (let j = Math.max(0, k - 2); j <= Math.min(n - 1, k + 2); j++) {
+        t += squeeze[j]
+        c++
+      }
+      return t / c
+    })
+    for (let i = 0; i < ribPos.length; i += 3) {
+      if (ribPos[i + 2] <= zMid) continue
+      const k = Math.floor(ribPos[i + 1] * 100) - y0
+      ribPos[i + 2] = zMid + (ribPos[i + 2] - zMid) * smooth[k]
+    }
+    console.log(`rib cage front pressed back: depth x${Math.min(...smooth).toFixed(2)} at most`)
+  }
+  addPart("ribcage", ribPos, rib.indices, "musculoskeletal", 22000)
 
   doc.createMaterial("heart:artery").setBaseColorFactor([0.7, 0.08, 0.1, 1]).setRoughnessFactor(0.4).setMetallicFactor(0)
   doc.createMaterial("heart:vein").setBaseColorFactor([0.2, 0.25, 0.6, 1]).setRoughnessFactor(0.4).setMetallicFactor(0)
@@ -195,18 +254,6 @@ async function addBodyParts3D(dir) {
     Height: nose tip to crown.
   */
   const bpSkinRaw = readElements(dir, ["FJ2810"])
-  const hraSkinPts = []
-  for (const n of nodesOf("whole-body")) {
-    const m = n.getWorldMatrix()
-    for (const p of n.getMesh().listPrimitives()) {
-      const a = p.getAttribute("POSITION")
-      const v = [0, 0, 0]
-      for (let i = 0; i < a.getCount(); i++) {
-        a.getElement(i, v)
-        hraSkinPts.push(m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12], m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13], m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14])
-      }
-    }
-  }
   const headMarks = (pts) => {
     const b = boundsOf(pts)
     const H = b.max[1] - b.min[1]
