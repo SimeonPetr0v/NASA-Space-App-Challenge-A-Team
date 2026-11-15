@@ -1,59 +1,101 @@
-import { BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Menu, Moon, RadioTower, Rocket, Sparkles, Users } from 'lucide-react'
-import { useEffect, useId, useRef, useState, type CSSProperties } from 'react'
+import { BedDouble, BookOpen, ChartLine, ClipboardPlus, LayoutDashboard, Menu, Moon, RadioTower, Rocket, Sparkles, Users } from 'lucide-react'
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { FEATURES } from '@/config/features'
 import { href, type Route } from '@/state/route'
 import { useStore } from '@/state/store'
 import './solar-nav.css'
 
 /*
-  Solar section menu (features.solarNav). A sun half off the right edge;
-  pointing at it, focusing it or tapping it sends the app's pages out as
-  planets on an arc, which then turn into page icons. Choosing one goes to
-  that page and folds the planets back into the sun.
+  Solar page menu (features.solarNav). A sun half off the edge of the screen:
+  at the right on computers and landscape tablets, at the bottom on phones
+  and portrait tablets (where it replaces the bottom bar). Its planets carry
+  the app's pages and turn into page icons.
+  - Pointing at it opens it; it stays open 3.5 s after the pointer leaves.
+  - Clicking or tapping the sun pins it open until the sun is clicked again
+    (Escape also closes it). Choosing a page keeps a pinned menu open.
 */
 
-const PLANETS = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune'] as const
+const PLANETS = ['mercury', 'venus', 'earth', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune', 'pluto'] as const
 
-const PAGES: { route: Route; label: string; icon: typeof LayoutDashboard; on: boolean }[] = [
-  { route: 'overview', label: 'Overview', icon: LayoutDashboard, on: true },
-  { route: 'crew', label: 'Crew board', icon: Users, on: FEATURES.crewBoard },
-  { route: 'log', label: 'Log reading', icon: ClipboardPlus, on: true },
-  { route: 'trends', label: 'Trends', icon: ChartLine, on: true },
-  { route: 'tot', label: 'TOT assistant', icon: Sparkles, on: FEATURES.tot },
-  { route: 'link', label: 'Earth link', icon: RadioTower, on: true },
-  { route: 'method', label: 'Methodology', icon: BookOpen, on: true },
-  { route: 'brief', label: 'Mission brief', icon: Rocket, on: true },
+/* short: the label at the bottom of the screen, where the planets sit close together */
+type Page = { route: Route; label: string; short: string; icon: typeof LayoutDashboard; on: boolean }
+const PAGES: Page[] = [
+  { route: 'overview', label: 'Overview', short: 'Home', icon: LayoutDashboard, on: true },
+  { route: 'crew', label: 'Crew board', short: 'Crew', icon: Users, on: FEATURES.crewBoard },
+  { route: 'log', label: 'Log reading', short: 'Log', icon: ClipboardPlus, on: true },
+  { route: 'trends', label: 'Trends', short: 'Trends', icon: ChartLine, on: true },
+  { route: 'tot', label: 'TOT assistant', short: 'TOT', icon: Sparkles, on: FEATURES.tot },
+  { route: 'link', label: 'Earth link', short: 'Link', icon: RadioTower, on: true },
+  { route: 'method', label: 'Methodology', short: 'Method', icon: BookOpen, on: true },
+  { route: 'brief', label: 'Mission brief', short: 'Brief', icon: Rocket, on: true },
 ]
+const SLEEP: Page = { route: 'sleep', label: 'Sleep shift', short: 'Sleep', icon: BedDouble, on: true }
 
-const ARC_DEG = 124
-const LEAVE_MS = 220
+/* Phones, and tablets held upright, get the sun at the bottom of the screen */
+const BOTTOM_DOCK_QUERY = '(max-width: 639px), (max-width: 1023px) and (orientation: portrait)'
+const subscribeDock = (cb: () => void) => {
+  const mq = window.matchMedia(BOTTOM_DOCK_QUERY)
+  mq.addEventListener('change', cb)
+  return () => mq.removeEventListener('change', cb)
+}
+const useBottomDock = () =>
+  useSyncExternalStore(
+    subscribeDock,
+    () => window.matchMedia(BOTTOM_DOCK_QUERY).matches,
+    () => false,
+  )
+
+/* Arc the planets sit on: centred on "left" (180 deg) at the right edge, on "up" (90 deg) at the bottom */
+const ARC = { right: { centre: 180, spread: 124 }, bottom: { centre: 90, spread: 150 } }
+/* After the pointer leaves, the menu stays open this long */
+const LEAVE_MS = 3500
+const BLUR_MS = 250
+/* Circle around a bubble for the curved label: from lower left, over the top, to lower right (radius 29 in an 80 x 80 box) */
+const ARC_PATH = (() => {
+  const r = 29
+  const a = (25 * Math.PI) / 180
+  const x = (r * Math.cos(a)).toFixed(2)
+  const y = (r * Math.sin(a)).toFixed(2)
+  return `M -${x} ${y} A ${r} ${r} 0 1 1 ${x} ${y}`
+})()
 
 export function SolarNav({ route }: { route: Route }) {
-  const pages = PAGES.filter((p) => p.on)
-  const lunar = useStore().theme === 'dark'
+  const theme = useStore().theme
+  const base = PAGES.filter((p) => p.on)
+  const pages = theme === 'night' ? [base[0], SLEEP, ...base.slice(1)] : base
+  const lunar = theme === 'dark'
   const HubIcon = lunar ? Moon : Menu
+  const bottom = useBottomDock()
+  const arc = bottom ? ARC.bottom : ARC.right
   const [open, setOpen] = useState(false)
+  const [pinned, setPinned] = useState(false)
   const root = useRef<HTMLElement>(null)
   const sun = useRef<HTMLButtonElement>(null)
   const leave = useRef(0)
   const quiet = useRef(false)
-  const openedAt = useRef(0)
-  const isOpen = useRef(false)
+  const state = useRef({ open: false, pinned: false })
   useEffect(() => {
-    isOpen.current = open
-  }, [open])
+    state.current = { open, pinned }
+  }, [open, pinned])
   const id = useId()
+
+  const close = () => {
+    window.clearTimeout(leave.current)
+    setOpen(false)
+    setPinned(false)
+  }
 
   useEffect(() => {
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setOpen(false)
+        close()
         sun.current?.focus()
       }
     }
+    /* An unpinned menu closes when you press anywhere else; a pinned one waits for the sun */
     const onDown = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false)
+      if (!state.current.pinned && !root.current?.contains(e.target as Node)) close()
     }
     window.addEventListener('keydown', onKey)
     window.addEventListener('pointerdown', onDown)
@@ -67,13 +109,15 @@ export function SolarNav({ route }: { route: Route }) {
 
   const show = () => {
     window.clearTimeout(leave.current)
-    if (quiet.current || isOpen.current) return
-    openedAt.current = performance.now()
+    if (quiet.current || state.current.open) return
     setOpen(true)
   }
-  const hide = () => {
+  const hideAfter = (ms: number) => {
     window.clearTimeout(leave.current)
-    leave.current = window.setTimeout(() => setOpen(false), LEAVE_MS)
+    if (state.current.pinned) return
+    leave.current = window.setTimeout(() => {
+      if (!state.current.pinned) setOpen(false)
+    }, ms)
   }
 
   return (
@@ -82,18 +126,19 @@ export function SolarNav({ route }: { route: Route }) {
       aria-label="Pages"
       className="solar"
       data-open={open}
+      data-dock={bottom ? 'bottom' : 'right'}
       style={{ '--n': pages.length } as CSSProperties}
       onPointerEnter={(e) => e.pointerType === 'mouse' && show()}
       onPointerLeave={(e) => {
         if (e.pointerType !== 'mouse') return
         quiet.current = false
-        hide()
+        hideAfter(LEAVE_MS)
       }}
       onFocus={(e) => {
         if (e.target.matches(':focus-visible')) show()
       }}
       onBlur={(e) => {
-        if (!root.current?.contains(e.relatedTarget as Node)) hide()
+        if (!root.current?.contains(e.relatedTarget as Node)) hideAfter(BLUR_MS)
       }}
     >
       <button
@@ -102,46 +147,69 @@ export function SolarNav({ route }: { route: Route }) {
         className={lunar ? 'solar-sun solar-moon' : 'solar-sun'}
         aria-expanded={open}
         aria-controls={id}
-        aria-label={open ? 'Close the page menu' : 'Open the page menu'}
+        aria-label={pinned ? 'Close the page menu' : 'Open and keep the page menu open'}
         onClick={() => {
-          quiet.current = false
-          if (isOpen.current && performance.now() - openedAt.current < 500) return
-          openedAt.current = performance.now()
-          setOpen((o) => !o)
+          window.clearTimeout(leave.current)
+          if (state.current.pinned) {
+            /* Second click: close, and do not reopen while the pointer is still on the sun */
+            quiet.current = true
+            close()
+          } else {
+            setPinned(true)
+            setOpen(true)
+          }
         }}
       >
         <span className="solar-hub-face" aria-hidden="true">
           <HubIcon className="solar-hub-icon" strokeWidth={2} />
-          <span className="solar-hub-text">{open ? 'Close' : 'Menu'}</span>
+          <span className="solar-hub-text">{pinned ? 'Close' : 'Menu'}</span>
         </span>
       </button>
       <ul id={id} className="solar-list">
         {pages.map((p, i) => {
-          const a = ((180 - ARC_DEG / 2 + (ARC_DEG * i) / Math.max(1, pages.length - 1)) * Math.PI) / 180
+          /* Right edge: top to bottom. Bottom edge: left to right */
+          const step = (arc.spread * i) / Math.max(1, pages.length - 1)
+          const deg = bottom ? arc.centre + arc.spread / 2 - step : arc.centre - arc.spread / 2 + step
+          const a = (deg * Math.PI) / 180
           const Icon = p.icon
           return (
             <li
               key={p.route}
               className="solar-item"
+              data-edge={i === 0 ? 'start' : i === pages.length - 1 ? 'end' : undefined}
               style={{ '--i': i, '--cx': Math.cos(a).toFixed(4), '--cy': (-Math.sin(a)).toFixed(4) } as CSSProperties}
             >
               <a
                 href={href(p.route)}
                 className="solar-link"
                 aria-current={route === p.route ? 'page' : undefined}
+                aria-label={p.label}
                 tabIndex={open ? 0 : -1}
                 aria-hidden={!open}
                 onClick={(e) => {
-                  quiet.current = true
-                  setOpen(false)
                   e.currentTarget.blur()
+                  if (state.current.pinned) return
+                  quiet.current = true
+                  close()
                 }}
               >
                 <span className={`solar-planet planet-${PLANETS[i % PLANETS.length]}`} aria-hidden="true" />
                 <span className="solar-icon" aria-hidden="true">
                   <Icon strokeWidth={1.75} />
                 </span>
-                <span className="solar-label">{p.label}</span>
+                {bottom ? (
+                  /* At the bottom the name curves over the top of its bubble, no box */
+                  <svg className="solar-arc-label" viewBox="-40 -40 80 80" aria-hidden="true">
+                    <path id={`${id}-arc-${i}`} d={ARC_PATH} fill="none" />
+                    <text>
+                      <textPath href={`#${id}-arc-${i}`} startOffset="50%" textAnchor="middle">
+                        {p.short}
+                      </textPath>
+                    </text>
+                  </svg>
+                ) : (
+                  <span className="solar-label">{p.label}</span>
+                )}
               </a>
             </li>
           )
