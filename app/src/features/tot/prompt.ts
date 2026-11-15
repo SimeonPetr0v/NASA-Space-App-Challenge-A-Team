@@ -21,6 +21,20 @@ LIBRARY (educational notes, not medical protocols)
 ${library}`
 }
 
+/*
+  Short prompt for the processor backup model: much smaller and slower, so
+  it gets only the rule-based summary (status, off-nominal readings, slow
+  changes, radiation) and at most one library passage.
+*/
+export function shortPrompt(facts: Facts, doc?: KnowledgeDoc) {
+  return `You are TOT, a health assistant in the Khonsu app for astronauts. Use only the facts below. Do not invent numbers. Do not diagnose. Suggest only re-measuring, resting, or talking to the crew medical officer. Answer in at most 80 words.
+
+FACTS (from Khonsu analytics)
+${facts.basic}${doc ? `
+
+NOTE [1] ${doc.title}: ${doc.text}` : ''}`
+}
+
 export const SUGGESTED = [
   'Give me my daily health summary.',
   'Why has my heart rate increased this week?',

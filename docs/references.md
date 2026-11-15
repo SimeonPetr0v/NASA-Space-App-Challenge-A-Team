@@ -33,6 +33,8 @@ Every external resource used in the project (required by the submission form, ev
 | Llama 3.2 1B Instruct (Meta), MLC q4f16_1 build | AI model, downloaded on first use | https://huggingface.co/mlc-ai/Llama-3.2-1B-Instruct-q4f16_1-MLC | Llama 3.2 Community License | TOT default model; weights are fetched by the user's browser, not stored in this repo |
 | Qwen2.5 0.5B / 1.5B Instruct (Alibaba), MLC q4f16_1 builds | AI model, downloaded on first use | https://huggingface.co/mlc-ai/Qwen2.5-0.5B-Instruct-q4f16_1-MLC | Apache-2.0 | Optional smaller / larger TOT models |
 | Oxanium (Severin Meyer), @fontsource-variable/oxanium | Font | https://github.com/sevmeyer/oxanium | SIL OFL 1.1 | Headings, brand and key labels |
+| Transformers.js (Hugging Face) 4.3.2, with ONNX Runtime Web | Library | https://github.com/huggingface/transformers.js | Apache-2.0 (ONNX Runtime: MIT) | TOT backup engine on the processor for devices without WebGPU |
+| SmolLM2-360M-Instruct (Hugging Face), ONNX q4 | AI model, downloaded on first use | https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct | Apache-2.0 | TOT backup model; weights fetched by the user's browser, not stored in this repo |
 | Space Grotesk (Florian Karsten), @fontsource-variable/space-grotesk | Font | https://github.com/floriankarsten/space-grotesk | SIL OFL 1.1 | Interface text and numbers |
 | JetBrains Mono, @fontsource/jetbrains-mono | Font | https://github.com/JetBrains/JetBrainsMono | SIL OFL 1.1 | Small technical labels |
 | Wikipedia — Khonsu; Thoth | Encyclopedia | https://en.wikipedia.org/wiki/Khonsu , https://en.wikipedia.org/wiki/Thoth | CC BY-SA 4.0 (facts paraphrased, not copied) | “About the names” on the Mission brief page |

@@ -50,3 +50,94 @@ export async function loadEngine(modelId: string, onProgress: (r: InitProgressRe
     throw e
   }
 }
+
+/* One interface for both engines, so the TOT page does not care which one runs */
+export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string }
+export type Runner = {
+  kind: 'gpu' | 'cpu'
+  stream: (messages: ChatMessage[], max: number, onText: (all: string) => void) => Promise<void>
+  interrupt: () => void
+  dispose: () => Promise<void>
+}
+
+export function gpuRunner(engine: Engine, worker: Worker): Runner {
+  return {
+    kind: 'gpu',
+    stream: async (messages, max, onText) => {
+      const chunks = await engine.chat.completions.create({ messages, stream: true, temperature: 0.3, max_tokens: max })
+      let text = ''
+      for await (const chunk of chunks) {
+        text += chunk.choices[0]?.delta?.content ?? ''
+        onText(text)
+      }
+    },
+    interrupt: () => engine.interruptGenerate(),
+    dispose: async () => {
+      await engine.unload().catch(() => undefined)
+      worker.terminate()
+    },
+  }
+}
+
+/*
+  Backup for devices without WebGPU (many Android phones): a small model on
+  the processor via Transformers.js in a worker. Slower, so the page sends it
+  a shorter prompt.
+*/
+export const CPU_MODEL = { id: 'HuggingFaceTB/SmolLM2-360M-Instruct', dtype: 'q4', name: 'SmolLM2 360M', downloadGB: 0.4 }
+
+export function loadCpuRunner(onProgress: (pct: number, text: string) => void): Promise<Runner> {
+  const worker = new Worker(new URL('./cpu.worker.ts', import.meta.url), { type: 'module' })
+  return new Promise((resolve, reject) => {
+    let onText: ((all: string) => void) | null = null
+    let text = ''
+    let finish: (() => void) | null = null
+    let fail: ((e: Error) => void) | null = null
+    worker.onmessage = (e: MessageEvent<{ type: string; pct?: number; text?: string; message?: string }>) => {
+      const m = e.data
+      if (m.type === 'progress') onProgress(m.pct ?? 0, m.text ?? '')
+      else if (m.type === 'ready')
+        resolve({
+          kind: 'cpu',
+          stream: (messages, max, cb) =>
+            new Promise<void>((res, rej) => {
+              onText = cb
+              text = ''
+              finish = res
+              fail = rej
+              worker.postMessage({ type: 'generate', messages, max })
+            }),
+          interrupt: () => worker.postMessage({ type: 'interrupt' }),
+          dispose: async () => worker.terminate(),
+        })
+      else if (m.type === 'token') {
+        text += m.text ?? ''
+        onText?.(text)
+      } else if (m.type === 'done') finish?.()
+      else if (m.type === 'error') {
+        const err = new Error(m.message)
+        if (fail) fail(err)
+        else {
+          worker.terminate()
+          reject(err)
+        }
+      }
+    }
+    worker.onerror = (e) => {
+      worker.terminate()
+      reject(new Error(e.message || 'The worker could not start'))
+    }
+    worker.postMessage({ type: 'load', model: CPU_MODEL.id, dtype: CPU_MODEL.dtype })
+  })
+}
+
+/** Whether the backup model is already in the browser cache (Transformers.js keeps it in 'transformers-cache') */
+export async function cpuModelCached(): Promise<boolean> {
+  try {
+    const cache = await caches.open('transformers-cache')
+    const keys = await cache.keys()
+    return keys.some((k) => k.url.includes(CPU_MODEL.id) && k.url.includes('.onnx'))
+  } catch {
+    return false
+  }
+}

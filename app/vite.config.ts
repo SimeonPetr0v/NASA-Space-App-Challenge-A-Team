@@ -17,6 +17,14 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,woff2,glb}'],
         maximumFileSizeToCacheInBytes: 12 * 1024 * 1024,
+        /* TOT's processor backup: the ONNX runtime (.wasm/.mjs) is kept after its first download so TOT also works offline */
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => url.pathname.endsWith('.wasm') || (url.hostname === 'cdn.jsdelivr.net' && url.pathname.includes('onnxruntime-web')),
+            handler: 'CacheFirst',
+            options: { cacheName: 'tot-runtime', expiration: { maxEntries: 12 }, cacheableResponse: { statuses: [0, 200] } },
+          },
+        ],
       },
       manifest: {
         name: 'Khonsu · Astronaut health',
