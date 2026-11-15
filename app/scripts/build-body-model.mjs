@@ -188,10 +188,69 @@ async function addBodyParts3D(dir) {
 
   const skull = concepts("FMA46565")
   const jaw = concepts("FMA52748")
-  const bpHead = boundsOf(yUp(concepts("FMA50801", "FMA12514", "FMA12515")))
-  const hraHead = unionBounds([...nodesOf("brain"), ...nodesOf("eyes")])
-  addPart("skull", mapBounds(yUp(skull), bpHead, hraHead), skull.indices, "musculoskeletal", 16000)
-  addPart("mandible", mapBounds(yUp(jaw), bpHead, hraHead), jaw.indices, "musculoskeletal", 3000)
+  /*
+    The skull is placed by matching the BodyParts3D skin head (which fits its
+    own skull) onto our skin head: nose tip, back of the head and width
+    above the ears (BodyParts3D ears lie flatter than ours).
+    Height: nose tip to crown.
+  */
+  const bpSkinRaw = readElements(dir, ["FJ2810"])
+  const hraSkinPts = []
+  for (const n of nodesOf("whole-body")) {
+    const m = n.getWorldMatrix()
+    for (const p of n.getMesh().listPrimitives()) {
+      const a = p.getAttribute("POSITION")
+      const v = [0, 0, 0]
+      for (let i = 0; i < a.getCount(); i++) {
+        a.getElement(i, v)
+        hraSkinPts.push(m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12], m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13], m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14])
+      }
+    }
+  }
+  const headMarks = (pts) => {
+    const b = boundsOf(pts)
+    const H = b.max[1] - b.min[1]
+    const crown = b.max[1]
+    const band = (lo, hi, f) => {
+      for (let i = 0; i < pts.length; i += 3) if (pts[i + 1] <= crown - lo * H && pts[i + 1] >= crown - hi * H) f(pts[i], pts[i + 1], pts[i + 2])
+    }
+    let nose = [0, 0, -Infinity]
+    band(0.05, 0.1, (x, y, z) => {
+      if (z > nose[2]) nose = [x, y, z]
+    })
+    let back = Infinity
+    band(0.02, 0.08, (x, y, z) => (back = Math.min(back, z)))
+    let x0 = Infinity
+    let x1 = -Infinity
+    band(0.015, 0.045, (x) => {
+      x0 = Math.min(x0, x)
+      x1 = Math.max(x1, x)
+    })
+    return { nose, back, x0, x1, crown }
+  }
+  const bpMarks = headMarks(yUp(bpSkinRaw))
+  const hraMarks = headMarks(hraSkinPts)
+  const sx = (hraMarks.x1 - hraMarks.x0) / (bpMarks.x1 - bpMarks.x0)
+  /* 2 % shorter front to back than the skins, so the back of the skull stays inside */
+  const sz = (0.98 * (hraMarks.nose[2] - hraMarks.back)) / (bpMarks.nose[2] - bpMarks.back)
+  const sy = (hraMarks.crown - hraMarks.nose[1]) / (bpMarks.crown - bpMarks.nose[1])
+  /* Tilted back around the nose tip, as our skin's forehead slopes back more */
+  const TILT = (4 * Math.PI) / 180
+  const headMap = (g) => {
+    const p = yUp(g)
+    const out = new Float32Array(p.length)
+    for (let i = 0; i < p.length; i += 3) {
+      out[i] = (hraMarks.x0 + hraMarks.x1) / 2 + (p[i] - (bpMarks.x0 + bpMarks.x1) / 2) * sx
+      const dy = (p[i + 1] - bpMarks.nose[1]) * sy
+      const dz = (p[i + 2] - bpMarks.nose[2]) * sz
+      out[i + 1] = hraMarks.nose[1] + dy * Math.cos(TILT) + dz * Math.sin(TILT)
+      out[i + 2] = hraMarks.nose[2] + dz * Math.cos(TILT) - dy * Math.sin(TILT)
+    }
+    return out
+  }
+  console.log(`skull fit: scale x ${(sx * 1000).toFixed(3)} y ${(sy * 1000).toFixed(3)} z ${(sz * 1000).toFixed(3)} (m per m); nose tip ${hraMarks.nose.map((v) => v.toFixed(3)).join(", ")}`)
+  addPart("skull", headMap(skull), skull.indices, "musculoskeletal", 16000)
+  addPart("mandible", headMap(jaw), jaw.indices, "musculoskeletal", 3000)
 
   /*
     Arms: skin and bones both from BodyParts3D, posed into our skin's arm
@@ -216,7 +275,6 @@ async function addBodyParts3D(dir) {
     }
   }
   skinMesh = weldMesh(skinMesh.pos, skinMesh.idx, 1e-6)
-  const bpSkinRaw = readElements(dir, ["FJ2810"])
   const bpSkin = weldMesh(Array.from(fromLungs(bpSkinRaw)), bpSkinRaw.indices, 1e-6)
   const hands = handBoneConcepts(dir)
   const posedBones = []
