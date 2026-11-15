@@ -2,8 +2,8 @@ import { useEffect, useRef } from 'react'
 
 /*
   Live pulse trace for the measuring screen, in the style of the app's
-  heartbeat mark: a flat line with one beat shape (small rise, dip, tall
-  spike, back to the line) at each heartbeat the camera detects. Beats are
+  heartbeat mark: a flat line with one wide beat shape (small rise, dip,
+  tall spike, back to the line) at each heartbeat the camera detects. Beats are
   found in real time from how fast the fingertip darkens (blood arriving),
   so each shape appears when the heart actually beats. It is a picture of
   the beat timing, not an ECG. Drawn on a canvas every screen frame and
@@ -12,17 +12,18 @@ import { useEffect, useRef } from 'react'
 
 export type TraceFeed = { push: (t: number, red: number, green: number) => void; clear: () => void }
 
-const WINDOW_MS = 4000
+const WINDOW_MS = 3000
 /* Beats closer than this are one beat (200 bpm) */
 const REFRACTORY_MS = 300
 /* The beat shape: [ms relative to the beat, height as a share of the half height; up is positive] */
 const BEAT: [number, number][] = [
-  [-110, 0],
-  [-80, 0.28],
-  [-55, -0.42],
-  [-10, 0.95],
-  [35, 0],
+  [-280, 0],
+  [-200, 0.3],
+  [-140, -0.45],
+  [-30, 0.95],
+  [90, 0],
 ]
+const BEAT_SPAN = 370
 
 export function PulseTrace({ feedRef }: { feedRef: React.MutableRefObject<TraceFeed | null> }) {
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -86,10 +87,13 @@ export function PulseTrace({ feedRef }: { feedRef: React.MutableRefObject<TraceF
         const amp = h * 0.44
         ctx.beginPath()
         ctx.moveTo(0, mid)
-        for (const b of beats) {
-          if (b + BEAT[BEAT.length - 1][0] < now - WINDOW_MS) continue
-          for (const [ms, y] of BEAT) ctx.lineTo(xOf(b + ms), mid - y * amp)
-        }
+        beats.forEach((b, i) => {
+          if (b + BEAT[BEAT.length - 1][0] < now - WINDOW_MS) return
+          /* Narrow the shape when beats come fast, so neighbouring beats never overlap (at most 75 % of the gap) */
+          const gap = Math.min(i > 0 ? b - beats[i - 1] : Infinity, i < beats.length - 1 ? beats[i + 1] - b : Infinity)
+          const k = Math.min(1, (0.75 * gap) / BEAT_SPAN)
+          for (const [ms, y] of BEAT) ctx.lineTo(xOf(b + ms * k), mid - y * amp)
+        })
         ctx.lineTo(w, mid)
         ctx.stroke()
       }
