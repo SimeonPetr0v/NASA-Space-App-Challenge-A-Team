@@ -392,9 +392,14 @@ async function addBodyParts3D(dir) {
 
   /*
     Foot bones (the HRA legs end at the ankle): every BodyParts3D tarsal,
-    metatarsal and toe phalanx, placed by mapping the BodyParts3D skin foot
-    (below the top of the talus) onto our skin foot (below the end of our
-    shin bones), so the bones fit their foot as in the source.
+    metatarsal and toe phalanx. Each foot is fitted in its own frame:
+    - anchor: the ankle joint, i.e. the centre between the ankle knobs
+      (lowest 3 cm of tibia + fibula) of our shin bones and of the
+      BodyParts3D shin bones, so the talus sits in our ankle mortise;
+    - direction: the heel-to-toe axis of each skin foot (main axis of the
+      sole seen from above), so the bones turn with our foot;
+    - size: heel, toes, width and height scaled separately to our skin
+      foot, with a little extra soft tissue under the sole and at the toes.
   */
   {
     const FOOT = /^(right|left) (talus|calcaneus|cuboid bone|first metatarsal|second metatarsal|third metatarsal|fourth metatarsal|fifth metatarsal|medial cuneiform|intermediate cuneiform|lateral cuneiform)|^navicular bone of (right|left) foot|^(proximal|middle|distal) phalanx of (right|left) (big|second|third|fourth|little) toe/
@@ -404,8 +409,10 @@ async function addBodyParts3D(dir) {
       .map((l) => l.split("\t"))
       .filter(([c, , name]) => c && FOOT.test(name ?? ""))
       .map(([c, , name]) => ({ concept: c, side: /left/.test(name) ? "left" : "right" }))
-    const bpSkinFeet = fromLungs(bpSkinRaw)
-    const hraLegLow = { 1: Infinity, [-1]: Infinity }
+    /* BodyParts3D side in its own true proportions (raw, Y up, mm -> m): the lungs mapping squashes heights */
+    const raw = (g) => yUp(g).map((v) => v / 1000)
+    const bpSkinFeet = raw(bpSkinRaw)
+    const hraShin = { 1: [], [-1]: [] }
     for (const n of nodesOf("musculoskeletal")) {
       if (!n.getName().startsWith("VH_M")) continue
       const m = n.getWorldMatrix()
@@ -416,31 +423,99 @@ async function addBodyParts3D(dir) {
           a.getElement(i, v)
           const x = m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12]
           const y = m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13]
-          if (Math.abs(x) > 0.03 && y < 0.5) hraLegLow[Math.sign(x)] = Math.min(hraLegLow[Math.sign(x)], y)
+          const z = m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14]
+          if (Math.abs(x) > 0.03 && y < 0.3) hraShin[Math.sign(x)].push(x, y, z)
         }
       }
     }
     const SOLE = 0.012
     const TOE = 0.016
-    const footBox = (pts, sign, top) => {
-      const out = []
-      for (let i = 0; i < pts.length; i += 3) if (pts[i] * sign > 0.02 && pts[i + 1] < top) out.push(pts[i], pts[i + 1], pts[i + 2])
-      return boundsOf(out)
+    const SIDE = 0.004
+    /* Ankle mortise: x/z centre of the lowest 3 cm of the shin bones, y at their lowest point */
+    const mortise = (pts) => {
+      const low = boundsOf(pts).min[1]
+      const band = []
+      for (let i = 0; i < pts.length; i += 3) if (pts[i + 1] < low + 0.03) band.push(pts[i], pts[i + 1], pts[i + 2])
+      const b = boundsOf(band)
+      return [(b.min[0] + b.max[0]) / 2, low, (b.min[2] + b.max[2]) / 2]
+    }
+    /* Skin foot below the ankle, its sole, and its heel-to-toe axis (sole band seen from above) */
+    const skinFoot = (pts, sign, top) => {
+      const foot = []
+      for (let i = 0; i < pts.length; i += 3) if (pts[i] * sign > 0.02 && pts[i + 1] < top) foot.push(pts[i], pts[i + 1], pts[i + 2])
+      const sole = boundsOf(foot).min[1]
+      let cx = 0
+      let cz = 0
+      let n = 0
+      for (let i = 0; i < foot.length; i += 3) {
+        if (foot[i + 1] >= sole + 0.035) continue
+        cx += foot[i]
+        cz += foot[i + 2]
+        n++
+      }
+      cx /= n
+      cz /= n
+      let sxx = 0
+      let sxz = 0
+      let szz = 0
+      for (let i = 0; i < foot.length; i += 3) {
+        if (foot[i + 1] >= sole + 0.035) continue
+        const dx = foot[i] - cx
+        const dz = foot[i + 2] - cz
+        sxx += dx * dx
+        sxz += dx * dz
+        szz += dz * dz
+      }
+      const angle = 0.5 * Math.atan2(2 * sxz, szz - sxx)
+      const along = [Math.sin(angle), 0, Math.cos(angle)]
+      return { foot, sole, along: along[2] < 0 ? along.map((v) => -v) : along }
+    }
+    /* Foot frame coordinates relative to the anchor: [along, across, up] */
+    const local = (p, o, along) => {
+      const d = [p[0] - o[0], p[1] - o[1], p[2] - o[2]]
+      return [d[0] * along[0] + d[2] * along[2], d[0] * along[2] - d[2] * along[0], d[1]]
+    }
+    const ranges = (pts, o, along) => {
+      const r = [[Infinity, -Infinity], [Infinity, -Infinity]]
+      for (let i = 0; i < pts.length; i += 3) {
+        const q = local([pts[i], pts[i + 1], pts[i + 2]], o, along)
+        r[0] = [Math.min(r[0][0], q[0]), Math.max(r[0][1], q[0])]
+        /* Width from the forefoot only: the ankle is wider than the foot under it */
+        if (q[0] > 0.03) r[1] = [Math.min(r[1][0], q[1]), Math.max(r[1][1], q[1])]
+      }
+      return r
     }
     for (const side of ["right", "left"]) {
       const g = concepts(...footBones.filter((b) => b.side === side).map((b) => b.concept))
-      const pos = fromLungs(g)
-      const sign = Math.sign(boundsOf(pos).min[0] + boundsOf(pos).max[0])
-      const talus = fromLungs(concepts(side === "right" ? "FMA24482" : "FMA24483"))
-      const from = footBox(bpSkinFeet, sign, boundsOf(talus).max[1])
-      const to = footBox(hraSkinPts, sign, hraLegLow[sign])
-      /* Our sole and toe tips get a little more soft tissue than the source */
-      to.min[1] += SOLE
-      to.max[2] -= TOE
-      to.min[0] += 0.004
-      to.max[0] -= 0.004
-      console.log(`foot ${side}: ${footBones.filter((b) => b.side === side).length} bones, ankle ${hraLegLow[sign].toFixed(3)} m, foot ${(to.max[2] - to.min[2]).toFixed(3)} m long`)
-      addPart(`foot_${side}`, mapBounds(pos, from, to), g.indices, "musculoskeletal", 4000)
+      const pos = raw(g)
+      const sign = Math.sign(boundsOf(fromLungs(g)).min[0] + boundsOf(fromLungs(g)).max[0])
+      const bpSign = Math.sign(boundsOf(pos).min[0] + boundsOf(pos).max[0])
+      const bpShin = raw(concepts(...(side === "right" ? ["FMA24477", "FMA24480"] : ["FMA24478", "FMA24481"])))
+      const o0 = mortise(bpShin)
+      const o1 = mortise(hraShin[sign])
+      const f0 = skinFoot(bpSkinFeet, bpSign, o0[1])
+      const f1 = skinFoot(hraSkinPts, sign, o1[1])
+      const r0 = ranges(f0.foot, o0, f0.along)
+      const r1 = ranges(f1.foot, o1, f1.along)
+      const kToe = (r1[0][1] - TOE) / r0[0][1]
+      const kHeel = r1[0][0] / r0[0][0]
+      const kIn = (r1[1][0] + SIDE) / r0[1][0]
+      const kOut = (r1[1][1] - SIDE) / r0[1][1]
+      const kUp = (o1[1] - (f1.sole + SOLE)) / (o0[1] - f0.sole)
+      const out = new Float32Array(pos.length)
+      const [a1, , c1] = f1.along
+      for (let i = 0; i < pos.length; i += 3) {
+        const [u, w, h] = local([pos[i], pos[i + 1], pos[i + 2]], o0, f0.along)
+        const u1 = u * (u > 0 ? kToe : kHeel)
+        const w1 = w * (w < 0 ? kIn : kOut)
+        const h1 = h * kUp
+        out[i] = o1[0] + u1 * a1 + w1 * c1
+        out[i + 1] = o1[1] + h1
+        out[i + 2] = o1[2] + u1 * c1 - w1 * a1
+      }
+      const deg = (v) => ((Math.atan2(v[0], v[2]) * 180) / Math.PI).toFixed(1)
+      console.log(`foot ${side}: ${footBones.filter((b) => b.side === side).length} bones; points ${deg(f1.along)} deg out (source ${deg(f0.along)}); scale toe ${kToe.toFixed(2)} heel ${kHeel.toFixed(2)} width ${kIn.toFixed(2)}/${kOut.toFixed(2)} height ${kUp.toFixed(2)}`)
+      addPart(`foot_${side}`, out, g.indices, "musculoskeletal", 4000)
     }
   }
 
