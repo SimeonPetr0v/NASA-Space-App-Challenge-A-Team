@@ -6,10 +6,13 @@
   - Slow drift (finger pressure, screen brightness, auto-exposure) is removed
     by subtracting the 0.8 s average, so the detector never stalls on a drift.
   - A beat is a local peak of what is left that the wave climbed to by at
-    least 0.8 standard deviations within the 0.5 s before it (the upstroke),
-    so small wiggles on a broad top do not count and weaker beats still do.
-    Peaks closer than 0.45 of the recent beat interval (at least 300 ms, so
-    at most 200 bpm) are one beat: the higher one is kept.
+    least its typical size (from the median deviation over the last 2 s)
+    within the 0.5 s before it (the upstroke), so small wiggles on a broad
+    top do not count and weaker beats still do.
+  - Peaks closer than 0.45 of the shorter recent beat intervals are one beat
+    (the higher is kept); always at least 300 ms (200 bpm) and at most 500 ms,
+    so one missed beat cannot make the next ones count as the same beat.
+  - Beats show about a second after the finger is on the lens.
   The rate itself still comes from ppg.ts; this only places the beats.
 */
 
@@ -18,7 +21,11 @@ export type Wave = { t: number; v: number }
 
 const BASELINE_MS = 0.8 * 1000
 const KEEP_MS = 4000
+/* The average needs this much signal first; beats are looked for once the wave is this long */
+const SETTLE_MS = 400
+const WARM_MS = 600
 const MIN_GAP_MS = 300
+const MAX_GAP_MS = 500
 
 const quantile = (xs: number[], q: number) => {
   if (!xs.length) return 0
@@ -53,26 +60,26 @@ export function createBeatFinder() {
     recentX = recentX.filter((p) => p.t >= t - BASELINE_MS)
     const slow = recentX.reduce((a, p) => a + p.x, 0) / recentX.length
     const fast = recentX.slice(-3).reduce((a, p) => a + p.x, 0) / Math.min(3, recentX.length)
-    /* The average is not settled during the first 0.8 s */
-    if (t - first < BASELINE_MS) return
+    if (t - first < SETTLE_MS) return
     /* Blood arriving darkens the fingertip, so a beat is a dip in brightness: flip it into a peak */
     wave.push({ t, v: slow - fast })
     while (wave.length && wave[0].t < t - KEEP_MS) wave.shift()
     while (beats.length && beats[0].t < t - KEEP_MS) beats.shift()
 
     const n = wave.length
-    if (n < 5 || wave[n - 1].t - wave[0].t < 1000) return
+    if (n < 5 || wave[n - 1].t - wave[0].t < WARM_MS) return
     const c = wave[n - 3]
     const peak = c.v >= wave[n - 4].v && c.v >= wave[n - 5].v && c.v > wave[n - 2].v && c.v > wave[n - 1].v
     if (!peak) return
-    const recent = wave.filter((p) => p.t >= t - 3000)
-    const mean = recent.reduce((a, p) => a + p.v, 0) / recent.length
-    const sd = Math.sqrt(recent.reduce((a, p) => a + (p.v - mean) ** 2, 0) / recent.length) || 1
+    /* Typical size of the wave over the last 2 s, from the median deviation, so a start-up exposure swing does not hide the first beats */
+    const recent = wave.filter((p) => p.t >= t - 2000).map((p) => p.v)
+    const mid = median(recent)
+    const sd = 1.4826 * median(recent.map((v) => Math.abs(v - mid))) || 1
     /* How far the wave climbed to this peak from its low point in the 0.5 s before it (the beat's upstroke) */
     const rise = c.v - Math.min(...wave.filter((p) => p.t >= c.t - 500 && p.t <= c.t).map((p) => p.v))
-    if (rise < 0.8 * sd) return
+    if (rise < sd) return
     const intervals = beats.slice(-7).map((b, i, a) => (i ? b.t - a[i - 1].t : 0)).slice(1)
-    const minGap = Math.max(MIN_GAP_MS, 0.45 * median(intervals))
+    const minGap = Math.min(MAX_GAP_MS, Math.max(MIN_GAP_MS, intervals.length >= 3 ? 0.45 * quantile(intervals, 0.25) : 0))
     const last = beats.at(-1)
     const s = rise / sd
     if (last && c.t - last.t < minGap) {
