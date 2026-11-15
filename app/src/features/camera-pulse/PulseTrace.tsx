@@ -6,7 +6,9 @@ import { createBeatFinder } from './beats'
   heartbeat mark: at each heartbeat the camera detects, a beat shape (small
   rise, dip, tall spike, back to the line) whose height follows that beat's
   strength and whose details vary per beat; between beats, the camera
-  signal's real small wobble. Beats are found in real time (beats.ts), so
+  signal's real small wobble. Until beats are found (the first second, or a
+  noisy stretch), the real wave is drawn full size instead, so the line
+  never sits flat while the finger is on the lens. Beats are found in real time (beats.ts), so
   each shape appears when the heart actually beats. It is a picture of
   the beat timing, not an ECG. Drawn on a canvas every screen frame and
   placed by time, so it scrolls smoothly at any camera frame rate.
@@ -37,6 +39,8 @@ export function PulseTrace({ feedRef }: { feedRef: React.MutableRefObject<TraceF
       clear: finder.clear,
     }
     let raf = 0
+    /* How tall the real wave is drawn: full size while no beats are found yet (or for a while), small between found beats */
+    let waveScale = 0.7
     const draw = () => {
       const c = canvas.current
       if (c) {
@@ -65,7 +69,10 @@ export function PulseTrace({ feedRef }: { feedRef: React.MutableRefObject<TraceF
           dip and ending varied per beat, so no two beats look the same.
         */
         const recent = pts.filter((p) => p.t >= now - WINDOW_MS - 400)
-        const wob = recent.reduce((m, p) => Math.max(m, Math.abs(p.v)), 0) || 1
+        const centre = recent.reduce((a, p) => a + p.v, 0) / Math.max(1, recent.length)
+        const wob = recent.reduce((m, p) => Math.max(m, Math.abs(p.v - centre)), 0) || 1
+        const found = beats.some((b) => b.t > now - 1500)
+        waveScale += ((found ? 0.22 : 0.7) - waveScale) * 0.08
         const line: [number, number][] = []
         /* Beat heights relative to the beats on screen, so stronger and weaker beats look different */
         const shown = beats.filter((b) => b.t >= now - WINDOW_MS - 400)
@@ -93,7 +100,7 @@ export function PulseTrace({ feedRef }: { feedRef: React.MutableRefObject<TraceF
           spans.push([b.t + BEAT[0][0] * k, b.t + BEAT[4][0] * k])
           for (const [ms, y] of shape) line.push([b.t + ms * k, y])
         })
-        for (const p of recent) if (!spans.some(([a, z]) => p.t > a && p.t < z)) line.push([p.t, (p.v / wob) * 0.22])
+        for (const p of recent) if (!spans.some(([a, z]) => p.t > a && p.t < z)) line.push([p.t, ((p.v - centre) / wob) * waveScale])
         line.sort((a, z) => a[0] - z[0])
         ctx.beginPath()
         line.forEach(([t, y], i) => (i ? ctx.lineTo(xOf(t), mid - y * amp) : ctx.moveTo(xOf(t), mid - y * amp)))
