@@ -542,6 +542,9 @@ export function Overview() {
           <ReadingsTable />
         </>
       )}
+      <p className="text-muted-foreground text-center text-xs">
+        Synthetic crew and readings. Supports self-assessment; it does not diagnose.
+      </p>
     </Page>
   );
 }
