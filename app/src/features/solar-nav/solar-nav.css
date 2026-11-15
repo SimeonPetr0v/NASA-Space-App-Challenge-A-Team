@@ -388,8 +388,8 @@
 */
 .solar[data-dock='bottom'] {
   --sun: 96px;
-  /* Narrow phones: the arc shrinks so the end planets stay 12 px inside the screen (ends sit at 22 deg, 2 x cos 22 = 1.854) */
-  --radius: min(162px, calc((100vw - var(--planet) - 24px) / 1.854));
+  /* Narrow phones: the arc shrinks so the end planets stay 20 px inside the screen, leaving room for their tilted names (ends sit at 22 deg, 2 x cos 22 = 1.854) */
+  --radius: min(162px, calc((100vw - var(--planet) - 40px) / 1.854));
   --planet: 40px;
   top: auto;
   right: auto;
@@ -514,3 +514,17 @@
 
 /* Pluto, for the ninth page (Sleep shift at night) */
 .planet-pluto { background: radial-gradient(circle at 35% 35%, #f3e6d8, #c9ab8e 55%, #8a6f58); }
+
+/* Very narrow phones (under 360 px): smaller planets so nine fit side by side with their names */
+@media (max-width: 359px) {
+  .solar[data-dock='bottom'] {
+    --planet: 34px;
+  }
+  .solar[data-dock='bottom'] .solar-icon svg {
+    width: 17px;
+    height: 17px;
+  }
+  .solar-arc-label text {
+    font-size: 8.5px;
+  }
+}
