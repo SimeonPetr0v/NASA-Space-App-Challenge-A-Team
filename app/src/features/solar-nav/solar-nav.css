@@ -381,9 +381,98 @@
   box-shadow: 0 0 0 1px oklch(0.85 0.02 210 / 25%), 0 0 10px 2px oklch(0.8 0.04 205 / 14%);
 }
 
-/* Phones: the bottom bar already holds every page and the arc has no room, so the sun is hidden */
-@media (max-width: 639px) {
-  .solar {
-    display: none;
+/*
+  Bottom dock (phones, and tablets held upright): the sun sits half below the
+  bottom edge, the planets fan out upward, labels show above them. It
+  replaces the bottom bar there (AppShell hides the bar with the same query).
+*/
+.solar[data-dock='bottom'] {
+  --sun: 96px;
+  --radius: 162px;
+  --planet: 42px;
+  top: auto;
+  right: auto;
+  bottom: env(safe-area-inset-bottom, 0px);
+  left: 50%;
+  width: calc(var(--radius) * 2 + var(--planet) + 40px);
+  height: calc(var(--radius) + var(--planet) + 40px);
+  transform: translateX(-50%);
+}
+@media (min-width: 640px) {
+  .solar[data-dock='bottom'] {
+    --sun: 112px;
+    --radius: 200px;
+    --planet: 46px;
   }
 }
+.solar[data-dock='bottom'] .solar-sun {
+  top: auto;
+  right: auto;
+  bottom: calc(var(--sun) / -2);
+  left: 50%;
+  margin: 0 0 0 calc(var(--sun) / -2);
+}
+.solar[data-dock='bottom'] .solar-item {
+  top: auto;
+  right: auto;
+  bottom: 0;
+  left: 50%;
+  margin: 0 0 calc(var(--planet) / -2) calc(var(--planet) / -2);
+}
+.solar[data-dock='bottom'] .solar-hub-face {
+  top: 0;
+  right: 0;
+  bottom: auto;
+  left: 0;
+  width: auto;
+  height: 50%;
+  padding: 6px 0 0;
+}
+.solar[data-dock='bottom'] .solar-hub-text {
+  display: inline;
+}
+.solar[data-dock='bottom'] .solar-label {
+  top: auto;
+  right: auto;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translate(-50%, 4px);
+}
+.solar[data-dock='bottom'] .solar-link:hover .solar-label,
+.solar[data-dock='bottom'] .solar-link:focus-visible .solar-label {
+  transform: translate(-50%, 0);
+}
+/* The open bottom menu always shows its (short) labels: touch has no hover */
+.solar[data-dock='bottom'][data-open='true'] .solar-label {
+  opacity: 1;
+  transform: translate(-50%, 0);
+  font-size: 10px;
+  padding: 2px 6px;
+  transition-delay: calc(var(--n) * var(--step-in) + var(--emerge));
+}
+
+/* The outermost labels at the bottom line up inward, so they never run off the screen */
+.solar[data-dock='bottom'] .solar-item[data-edge='start'] .solar-label {
+  left: 0;
+  transform: translate(0, 4px);
+}
+.solar[data-dock='bottom'] .solar-item[data-edge='end'] .solar-label {
+  left: auto;
+  right: 0;
+  transform: translate(0, 4px);
+}
+.solar[data-dock='bottom'][data-open='true'] .solar-item[data-edge] .solar-label,
+.solar[data-dock='bottom'] .solar-item[data-edge] .solar-link:hover .solar-label,
+.solar[data-dock='bottom'] .solar-item[data-edge] .solar-link:focus-visible .solar-label {
+  transform: translate(0, 0);
+}
+
+/* Where the sun is at the bottom it replaces the bottom bar */
+@media (max-width: 639px), (max-width: 1023px) and (orientation: portrait) {
+  .kh-mobile-nav {
+    display: none !important;
+  }
+}
+
+/* Pluto, for the ninth page (Sleep shift at night) */
+.planet-pluto { background: radial-gradient(circle at 35% 35%, #f3e6d8, #c9ab8e 55%, #8a6f58); }

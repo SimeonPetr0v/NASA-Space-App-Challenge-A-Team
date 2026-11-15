@@ -144,7 +144,7 @@ const shortLabel = (label: string, tight: boolean) => (tight && TIGHT[label]) ||
 function MobileNav({ route }: { route: Route }) {
   const nav = useNav()
   return (
-    <nav aria-label="Main" style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }} className="bg-card border-border fixed inset-x-0 bottom-0 z-30 grid border-t pb-[env(safe-area-inset-bottom)] lg:hidden">
+    <nav aria-label="Main" style={{ gridTemplateColumns: `repeat(${nav.length}, minmax(0, 1fr))` }} className={cn('bg-card border-border fixed inset-x-0 bottom-0 z-30 grid border-t pb-[env(safe-area-inset-bottom)] lg:hidden', FEATURES.solarNav && 'kh-mobile-nav')}>
       {nav.map(({ route: r, label, icon: Icon }) => (
         <a
           key={r}
