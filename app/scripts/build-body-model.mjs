@@ -185,8 +185,10 @@ async function addBodyParts3D(dir) {
   const ribPos = mapBounds(toYUp(rib.positions, mirrorX), bpLungs, hraLungs)
   /*
     The lungs end well above the bottom of a real rib cage, so the cage is
-    stretched down (top fixed) until its lowest rib is RIB_ABOVE_HIP above
-    our iliac crest (highest hip bone point beside the spine).
+    stretched down until its lowest rib is RIB_ABOVE_HIP above our iliac
+    crest (highest hip bone point beside the spine). Only the part below the
+    top of the sternum stretches, so the sternum stays where the collarbones
+    meet it.
   */
   {
     const RIB_ABOVE_HIP = 0.08
@@ -205,9 +207,12 @@ async function addBodyParts3D(dir) {
       }
     }
     const rb = boundsOf(ribPos)
-    const k = (rb.max[1] - (crest + RIB_ABOVE_HIP)) / (rb.max[1] - rb.min[1])
-    if (k > 1) for (let i = 1; i < ribPos.length; i += 3) ribPos[i] = rb.max[1] - (rb.max[1] - ribPos[i]) * k
-    console.log(`rib cage: iliac crest ${crest.toFixed(3)} m, bottom ${rb.min[1].toFixed(3)} -> ${(rb.max[1] - (rb.max[1] - rb.min[1]) * Math.max(1, k)).toFixed(3)} m (x${k.toFixed(2)} tall)`)
+    const zc = (rb.min[2] + rb.max[2]) / 2
+    let pivot = -Infinity
+    for (let i = 0; i < ribPos.length; i += 3) if (Math.abs(ribPos[i]) < 0.02 && ribPos[i + 2] > zc + 0.03) pivot = Math.max(pivot, ribPos[i + 1])
+    const k = (pivot - (crest + RIB_ABOVE_HIP)) / (pivot - rb.min[1])
+    if (k > 1) for (let i = 1; i < ribPos.length; i += 3) if (ribPos[i] < pivot) ribPos[i] = pivot - (pivot - ribPos[i]) * k
+    console.log(`rib cage: sternum top ${pivot.toFixed(3)} m, iliac crest ${crest.toFixed(3)} m, bottom ${rb.min[1].toFixed(3)} -> ${(pivot - (pivot - rb.min[1]) * Math.max(1, k)).toFixed(3)} m (x${k.toFixed(2)} below the sternum top)`)
   }
   {
     const RIB_TISSUE = 0.016
@@ -324,7 +329,7 @@ async function addBodyParts3D(dir) {
     return out
   }
   console.log(`skull fit: scale x ${(sx * 1000).toFixed(3)} y ${(sy * 1000).toFixed(3)} z ${(sz * 1000).toFixed(3)} (m per m); nose tip ${hraMarks.nose.map((v) => v.toFixed(3)).join(", ")}`)
-  addPart("skull", headMap(skull), skull.indices, "musculoskeletal", 16000)
+  addPart("skull", headMap(skull), skull.indices, "musculoskeletal", 13000)
   addPart("mandible", headMap(jaw), jaw.indices, "musculoskeletal", 3000)
 
   /*
@@ -370,7 +375,7 @@ async function addBodyParts3D(dir) {
     armPos.set(res.bones.hum)
     armPos.set(res.bones.fore, res.bones.hum.length)
     addPart(`arm_${side}`, armPos, [...humerus.indices, ...forearm.indices.map((i) => i + humerus.positions.length / 3)], "musculoskeletal", 6000)
-    addPart(`hand_${side}`, res.bones.hand, hand.indices, "musculoskeletal", 6000)
+    addPart(`hand_${side}`, res.bones.hand, hand.indices, "musculoskeletal", 4500)
   }
   {
     const material = skinNodes[0].getMesh().listPrimitives()[0].getMaterial()
@@ -383,6 +388,60 @@ async function addBodyParts3D(dir) {
     const share = insideTester(skinMesh.pos, skinMesh.idx)
     for (const b of posedBones) console.log(`inside skin ${b.side}: humerus ${(share(b.hum) * 100).toFixed(1)} %, forearm ${(share(b.fore) * 100).toFixed(1)} %, hand ${(share(b.hand) * 100).toFixed(1)} %`)
     console.log(`skin with BodyParts3D arms: ${(skinMesh.idx.length / 3).toLocaleString()} tris`)
+  }
+
+  /*
+    Foot bones (the HRA legs end at the ankle): every BodyParts3D tarsal,
+    metatarsal and toe phalanx, placed by mapping the BodyParts3D skin foot
+    (below the top of the talus) onto our skin foot (below the end of our
+    shin bones), so the bones fit their foot as in the source.
+  */
+  {
+    const FOOT = /^(right|left) (talus|calcaneus|cuboid bone|first metatarsal|second metatarsal|third metatarsal|fourth metatarsal|fifth metatarsal|medial cuneiform|intermediate cuneiform|lateral cuneiform)|^navicular bone of (right|left) foot|^(proximal|middle|distal) phalanx of (right|left) (big|second|third|fourth|little) toe/
+    const footBones = readFileSync(join_(dir, "partof_parts_list_e.txt"), "utf8")
+      .split(/\r?\n/)
+      .slice(1)
+      .map((l) => l.split("\t"))
+      .filter(([c, , name]) => c && FOOT.test(name ?? ""))
+      .map(([c, , name]) => ({ concept: c, side: /left/.test(name) ? "left" : "right" }))
+    const bpSkinFeet = fromLungs(bpSkinRaw)
+    const hraLegLow = { 1: Infinity, [-1]: Infinity }
+    for (const n of nodesOf("musculoskeletal")) {
+      if (!n.getName().startsWith("VH_M")) continue
+      const m = n.getWorldMatrix()
+      for (const p of n.getMesh().listPrimitives()) {
+        const a = p.getAttribute("POSITION")
+        const v = [0, 0, 0]
+        for (let i = 0; i < a.getCount(); i++) {
+          a.getElement(i, v)
+          const x = m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12]
+          const y = m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13]
+          if (Math.abs(x) > 0.03 && y < 0.5) hraLegLow[Math.sign(x)] = Math.min(hraLegLow[Math.sign(x)], y)
+        }
+      }
+    }
+    const SOLE = 0.012
+    const TOE = 0.016
+    const footBox = (pts, sign, top) => {
+      const out = []
+      for (let i = 0; i < pts.length; i += 3) if (pts[i] * sign > 0.02 && pts[i + 1] < top) out.push(pts[i], pts[i + 1], pts[i + 2])
+      return boundsOf(out)
+    }
+    for (const side of ["right", "left"]) {
+      const g = concepts(...footBones.filter((b) => b.side === side).map((b) => b.concept))
+      const pos = fromLungs(g)
+      const sign = Math.sign(boundsOf(pos).min[0] + boundsOf(pos).max[0])
+      const talus = fromLungs(concepts(side === "right" ? "FMA24482" : "FMA24483"))
+      const from = footBox(bpSkinFeet, sign, boundsOf(talus).max[1])
+      const to = footBox(hraSkinPts, sign, hraLegLow[sign])
+      /* Our sole and toe tips get a little more soft tissue than the source */
+      to.min[1] += SOLE
+      to.max[2] -= TOE
+      to.min[0] += 0.004
+      to.max[0] -= 0.004
+      console.log(`foot ${side}: ${footBones.filter((b) => b.side === side).length} bones, ankle ${hraLegLow[sign].toFixed(3)} m, foot ${(to.max[2] - to.min[2]).toFixed(3)} m long`)
+      addPart(`foot_${side}`, mapBounds(pos, from, to), g.indices, "musculoskeletal", 4000)
+    }
   }
 
   doc.createMaterial("whole-body:stomach").setBaseColorFactor([0.85, 0.55, 0.5, 1]).setRoughnessFactor(0.5).setMetallicFactor(0)

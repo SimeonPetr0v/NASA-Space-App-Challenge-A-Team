@@ -359,7 +359,7 @@ const polarRim = (pos, rim, o, ea, eb) => {
   Returns the HRA skin without this arm plus the posed BodyParts3D arm
   stitched on, and the posed bones.
 */
-export function bp3dArm({ hra, bp, bones, sign, side, armTris = 12000, log = console.log }) {
+export function bp3dArm({ hra, bp, bones, sign, side, armTris = 10500, log = console.log }) {
   const hum = boneEnds(bones.hum)
   const fore = boneEnds(bones.fore)
   const S = hum.top
