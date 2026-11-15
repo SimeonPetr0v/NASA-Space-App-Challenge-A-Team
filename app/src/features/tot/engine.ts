@@ -131,11 +131,18 @@ export function loadCpuRunner(onProgress: (pct: number, text: string) => void): 
   })
 }
 
-/** Whether the backup model is already in the browser cache (Transformers.js keeps it in 'transformers-cache') */
+/** Whether the backup model is already stored on this device (OPFS 'tot-models', or the Cache API without OPFS) */
 export async function cpuModelCached(): Promise<boolean> {
+  const id = CPU_MODEL.id.replace(/[^a-z0-9._-]/gi, '_')
   try {
-    const cache = await caches.open('transformers-cache')
-    const keys = await cache.keys()
+    const root = await navigator.storage.getDirectory()
+    const d = await root.getDirectoryHandle('tot-models')
+    for await (const name of (d as unknown as { keys: () => AsyncIterable<string> }).keys()) if (name.includes(id) && name.endsWith('.onnx')) return true
+  } catch {
+    /* no OPFS or nothing stored yet */
+  }
+  try {
+    const keys = await (await caches.open('transformers-cache')).keys()
     return keys.some((k) => k.url.includes(CPU_MODEL.id) && k.url.includes('.onnx'))
   } catch {
     return false

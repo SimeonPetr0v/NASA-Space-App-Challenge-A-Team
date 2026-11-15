@@ -9,6 +9,56 @@ import { env, InterruptableStoppingCriteria, pipeline, TextStreamer } from '@hug
 
 env.allowLocalModels = false
 
+/*
+  Model files are stored in the browser's private file system (OPFS), not
+  the Cache API: Chrome can fail to put a single ~400 MB response into the
+  Cache API ("Unexpected internal error"). Each file is streamed to a
+  temporary name and renamed when complete, so a broken download is never
+  mistaken for a finished one. Falls back to the Cache API without OPFS.
+*/
+const OPFS_DIR = 'tot-models'
+const fileName = (key: string) => key.replace(/^https?:\/\//, '').replace(/[^a-z0-9._-]/gi, '_').slice(-180)
+const dir = async () => (await navigator.storage.getDirectory()).getDirectoryHandle(OPFS_DIR, { create: true })
+const opfsCache = {
+  async match(key: string) {
+    try {
+      const file = await (await (await dir()).getFileHandle(fileName(key))).getFile()
+      return new Response(file, { headers: { 'content-length': String(file.size) } })
+    } catch {
+      return undefined
+    }
+  },
+  async put(key: string, response: Response) {
+    const d = await dir()
+    const name = fileName(key)
+    const part = await d.getFileHandle(`${name}.part`, { create: true })
+    const writable = await part.createWritable()
+    try {
+      if (response.body) await response.body.pipeTo(writable)
+      else {
+        await writable.write(await response.arrayBuffer())
+        await writable.close()
+      }
+      /* Rename when complete (copy where the browser cannot rename) */
+      const movable = part as FileSystemFileHandle & { move?: (name: string) => Promise<void> }
+      if (movable.move) await movable.move(name)
+      else {
+        const out = await (await d.getFileHandle(name, { create: true })).createWritable()
+        await (await part.getFile()).stream().pipeTo(out)
+        await d.removeEntry(`${name}.part`)
+      }
+    } catch {
+      await d.removeEntry(`${name}.part`).catch(() => undefined)
+      await d.removeEntry(name).catch(() => undefined)
+    }
+  },
+}
+if (typeof navigator !== 'undefined' && 'storage' in navigator && 'getDirectory' in navigator.storage) {
+  env.useBrowserCache = false
+  env.useCustomCache = true
+  env.customCache = opfsCache as never
+}
+
 type Msg =
   | { type: 'load'; model: string; dtype: string }
   | { type: 'generate'; messages: { role: string; content: string }[]; max: number }

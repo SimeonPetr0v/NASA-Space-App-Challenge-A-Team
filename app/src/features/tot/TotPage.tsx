@@ -4,13 +4,16 @@ import { PageBanner } from '@/components/PageBanner'
 import { Panel, PanelHeader } from '@/components/Panel'
 import { Action } from '@/components/ui/action'
 import { TOT_CHAT_KEY, TOT_MAX_MESSAGES, TOT_MODEL_KEY, TOT_MODELS, TOT_PHONE_DEFAULT } from '@/config/tot'
+import { INDICATORS } from '@/data/indicators'
+import { ESCALATION_TEXT } from '@/engine/assess'
+import type { IndicatorId } from '@/engine/types'
 import { cn } from '@/lib/utils'
 import { Page } from '@/shell/Page'
 import { useStore } from '@/state/store'
 import { useHealth } from '@/state/useHealth'
 import { CPU_MODEL, cpuModelCached, explainError, gpuInfo, gpuRunner, loadCpuRunner, loadEngine, modelCached, type ChatMessage, type Runner } from './engine'
 import { buildFacts } from './facts'
-import { shortPrompt, SUGGESTED, systemPrompt } from './prompt'
+import { cpuPrompt, measuredFor, SUGGESTED, systemPrompt, topicsOf } from './prompt'
 import { retrieve } from './retrieve'
 
 /*
@@ -59,7 +62,7 @@ function Answer({ text }: { text: string }) {
       {text.split('\n').map((line, i) => {
         const clean = line.replace(/\*\*/g, '').replace(/^#+\s*/, '').trim()
         if (!clean) return null
-        const heading = /^(measured|trend|possible explanations|what to do)\b:?$/i.test(clean) || /^#+\s/.test(line) || /^\*\*[^*]+\*\*:?$/.test(line.trim())
+        const heading = (/^(measured|trend|possible explanations|what to do)\b/i.test(clean) && clean.length < 40) || /^#+\s/.test(line) || /^\*\*[^*]+\*\*:?$/.test(line.trim())
         if (heading) return <p key={i} className="label text-muted-foreground mt-2 first:mt-0">{clean.replace(/:$/, '')}</p>
         return (
           <p key={i} className={cn(/^[-*•]\s/.test(clean) && 'pl-3')}>
@@ -169,10 +172,10 @@ export function TotPage() {
     const question = q.trim()
     if (!question || busy || !current) return
     setInput('')
-    const docs = retrieve(question, facts.topics)
+    const cpu = current.runner.kind === 'cpu'
+    const docs = retrieve(question, facts.topics).slice(0, cpu ? 1 : 3)
     const sources = docs.map((d) => ({ title: d.title, label: d.sourceLabel, url: d.sourceUrl }))
     const at = new Date().toISOString()
-    const cpu = current.runner.kind === 'cpu'
     const past: ChatMessage[] = messages
       .filter((m) => !m.basic)
       .slice(cpu ? -2 : -6)
@@ -180,10 +183,25 @@ export function TotPage() {
     setMessages((m) => [...m, { role: 'user', text: question, at }, { role: 'assistant', text: '', sources, at }])
     setBusy(true)
     try {
-      const system = cpu ? shortPrompt(facts, docs[0]) : systemPrompt(facts, docs)
-      await current.runner.stream([{ role: 'system', content: system }, ...past, { role: 'user', content: question }], cpu ? 200 : 380, (text) =>
-        setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text }]),
-      )
+      if (cpu) {
+        /* Measured and What to do come from the analytics; the small model only adds possible explanations */
+        const labels = Object.fromEntries(Object.entries(INDICATORS).map(([id, d]) => [id, d.label])) as Record<IndicatorId, string>
+        const measured = measuredFor(question, facts, labels)
+        const ids = topicsOf(question)
+        const off = health.summary.priority.find((a) => a.guidance && (!ids.length || ids.includes(a.indicatorId)))
+        const todo = off?.guidance ? `${off.guidance.doNow[0]} Re-check in ${off.guidance.recheckIn}.` : ESCALATION_TEXT[health.summary.escalation].detail
+        const head = `Measured\n${measured.map((l) => (l.startsWith('- ') ? l : `- ${l}`)).join('\n')}\n\nPossible explanations (AI)\n`
+        let said = ''
+        await current.runner.stream([{ role: 'system', content: cpuPrompt(measured, docs[0]) }, { role: 'user', content: question }], 70, (text) => {
+          said = text
+          setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text: head + text }])
+        })
+        setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text: `${head}${said.trim()}\n\nWhat to do\n${todo}` }])
+      } else {
+        await current.runner.stream([{ role: 'system', content: systemPrompt(facts, docs) }, ...past, { role: 'user', content: question }], 380, (text) =>
+          setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text }]),
+        )
+      }
     } catch (e) {
       setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text: `TOT stopped: ${e instanceof Error ? e.message : String(e)}` }])
     } finally {
@@ -293,7 +311,7 @@ export function TotPage() {
             <div className="grid gap-3 p-4 text-sm sm:p-5">
               {engineKind === 'cpu' ? (
                 <p className="text-muted-foreground">
-                  This browser has no WebGPU, so TOT runs <span className="text-foreground font-medium">{CPU_MODEL.name}</span>, a smaller model, on the processor. Answers are shorter and slower (expect 30–60 s each).
+                  This browser has no WebGPU, so TOT runs <span className="text-foreground font-medium">{CPU_MODEL.name}</span>, a smaller model, on the processor. Answers are shorter and slower: about a minute each, longer on older phones.
                 </p>
               ) : (
               <label className="grid gap-1">
