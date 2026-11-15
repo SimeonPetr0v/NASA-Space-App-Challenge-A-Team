@@ -4,13 +4,16 @@ import { PageBanner } from '@/components/PageBanner'
 import { Panel, PanelHeader } from '@/components/Panel'
 import { Action } from '@/components/ui/action'
 import { TOT_CHAT_KEY, TOT_MAX_MESSAGES, TOT_MODEL_KEY, TOT_MODELS, TOT_PHONE_DEFAULT } from '@/config/tot'
+import { INDICATORS } from '@/data/indicators'
+import { ESCALATION_TEXT } from '@/engine/assess'
+import type { IndicatorId } from '@/engine/types'
 import { cn } from '@/lib/utils'
 import { Page } from '@/shell/Page'
 import { useStore } from '@/state/store'
 import { useHealth } from '@/state/useHealth'
-import { explainError, gpuInfo, loadEngine, modelCached, type Engine } from './engine'
+import { CPU_MODEL, cpuModelCached, explainError, gpuInfo, gpuRunner, loadCpuRunner, loadEngine, modelCached, type ChatMessage, type Runner } from './engine'
 import { buildFacts } from './facts'
-import { SUGGESTED, systemPrompt } from './prompt'
+import { cpuPrompt, measuredFor, SUGGESTED, systemPrompt, topicsOf } from './prompt'
 import { retrieve } from './retrieve'
 
 /*
@@ -25,7 +28,7 @@ type Message = { role: 'user' | 'assistant'; text: string; sources?: Source[]; b
 type Status = 'checking' | 'unsupported' | 'idle' | 'loading' | 'ready' | 'error'
 
 /* One engine for the whole app session, so leaving the page does not unload the model */
-let current: { engine: Engine; worker: Worker; modelId: string } | null = null
+let current: { runner: Runner; modelId: string } | null = null
 
 /* Whether this device's graphics chip has 16-bit float shaders; null until checked */
 let deviceF16: boolean | null = null
@@ -59,7 +62,7 @@ function Answer({ text }: { text: string }) {
       {text.split('\n').map((line, i) => {
         const clean = line.replace(/\*\*/g, '').replace(/^#+\s*/, '').trim()
         if (!clean) return null
-        const heading = /^(measured|trend|possible explanations|what to do)\b:?$/i.test(clean) || /^#+\s/.test(line) || /^\*\*[^*]+\*\*:?$/.test(line.trim())
+        const heading = (/^(measured|trend|possible explanations|what to do)\b/i.test(clean) && clean.length < 40) || /^#+\s/.test(line) || /^\*\*[^*]+\*\*:?$/.test(line.trim())
         if (heading) return <p key={i} className="label text-muted-foreground mt-2 first:mt-0">{clean.replace(/:$/, '')}</p>
         return (
           <p key={i} className={cn(/^[-*•]\s/.test(clean) && 'pl-3')}>
@@ -78,6 +81,8 @@ export function TotPage() {
   const [progress, setProgress] = useState({ pct: 0, text: '' })
   const [error, setError] = useState('')
   const [modelId, setModelId] = useState(current?.modelId ?? readModel())
+  /* gpu: WebLLM on the graphics chip; cpu: the smaller backup model on the processor (no WebGPU) */
+  const [engineKind, setEngineKind] = useState<'gpu' | 'cpu'>(current?.runner.kind ?? 'gpu')
   const [messages, setMessages] = useState<Message[]>(() => readChat(crewId))
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -105,19 +110,24 @@ export function TotPage() {
     end.current?.scrollIntoView({ block: 'nearest' })
   }, [messages, crewId])
 
-  const start = async (id = modelId) => {
+  const start = async (id = modelId, kind = engineKind) => {
     setError('')
     setStatus('loading')
     setProgress({ pct: 0, text: 'Starting…' })
+    const wanted = kind === 'cpu' ? CPU_MODEL.id : id
     try {
-      if (current && current.modelId !== id) {
-        await current.engine.unload().catch(() => undefined)
-        current.worker.terminate()
+      if (current && current.modelId !== wanted) {
+        await current.runner.dispose()
         current = null
       }
       if (!current) {
-        const loaded = await loadEngine(buildOf(id), (r) => setProgress({ pct: Math.round(r.progress * 100), text: r.text }))
-        current = { ...loaded, modelId: id }
+        if (kind === 'cpu') {
+          const runner = await loadCpuRunner((pct, text) => setProgress({ pct, text }))
+          current = { runner, modelId: wanted }
+        } else {
+          const loaded = await loadEngine(buildOf(id), (r) => setProgress({ pct: Math.round(r.progress * 100), text: r.text }))
+          current = { runner: gpuRunner(loaded.engine, loaded.worker), modelId: wanted }
+        }
       }
       setStatus('ready')
     } catch (e) {
@@ -130,10 +140,17 @@ export function TotPage() {
     if (current) return
     let gone = false
     void (async () => {
-      const gpu = await gpuInfo()
+      /* ?tot-cpu in the address forces the processor backup, to test or show it on any device */
+      const forceCpu = new URLSearchParams(window.location.search).has('tot-cpu')
+      const gpu = forceCpu ? { ok: false, f16: false } : await gpuInfo()
       deviceF16 = gpu.f16
       if (!gpu.ok) {
-        if (!gone) setStatus('unsupported')
+        /* No WebGPU: offer the processor backup instead */
+        if (gone) return
+        setEngineKind('cpu')
+        if (await cpuModelCached()) {
+          if (!gone) void start(CPU_MODEL.id, 'cpu')
+        } else if (!gone) setStatus('idle')
         return
       }
       if (await modelCached(buildOf(modelId))) {
@@ -155,23 +172,35 @@ export function TotPage() {
     const question = q.trim()
     if (!question || busy || !current) return
     setInput('')
-    const docs = retrieve(question, facts.topics)
+    const cpu = current.runner.kind === 'cpu'
+    const docs = retrieve(question, facts.topics).slice(0, cpu ? 1 : 3)
     const sources = docs.map((d) => ({ title: d.title, label: d.sourceLabel, url: d.sourceUrl }))
     const at = new Date().toISOString()
-    const past = messages.filter((m) => !m.basic).slice(-6).map((m) => ({ role: m.role, content: m.text }))
+    const past: ChatMessage[] = messages
+      .filter((m) => !m.basic)
+      .slice(cpu ? -2 : -6)
+      .map((m) => ({ role: m.role, content: m.text }))
     setMessages((m) => [...m, { role: 'user', text: question, at }, { role: 'assistant', text: '', sources, at }])
     setBusy(true)
     try {
-      const stream = await current.engine.chat.completions.create({
-        messages: [{ role: 'system', content: systemPrompt(facts, docs) }, ...past, { role: 'user', content: question }],
-        stream: true,
-        temperature: 0.3,
-        max_tokens: 380,
-      })
-      let text = ''
-      for await (const chunk of stream) {
-        text += chunk.choices[0]?.delta?.content ?? ''
-        setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text }])
+      if (cpu) {
+        /* Measured and What to do come from the analytics; the small model only adds possible explanations */
+        const labels = Object.fromEntries(Object.entries(INDICATORS).map(([id, d]) => [id, d.label])) as Record<IndicatorId, string>
+        const measured = measuredFor(question, facts, labels)
+        const ids = topicsOf(question)
+        const off = health.summary.priority.find((a) => a.guidance && (!ids.length || ids.includes(a.indicatorId)))
+        const todo = off?.guidance ? `${off.guidance.doNow[0]} Re-check in ${off.guidance.recheckIn}.` : ESCALATION_TEXT[health.summary.escalation].detail
+        const head = `Measured\n${measured.map((l) => (l.startsWith('- ') ? l : `- ${l}`)).join('\n')}\n\nPossible explanations (AI)\n`
+        let said = ''
+        await current.runner.stream([{ role: 'system', content: cpuPrompt(measured, docs[0]) }, { role: 'user', content: question }], 70, (text) => {
+          said = text
+          setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text: head + text }])
+        })
+        setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text: `${head}${said.trim()}\n\nWhat to do\n${todo}` }])
+      } else {
+        await current.runner.stream([{ role: 'system', content: systemPrompt(facts, docs) }, ...past, { role: 'user', content: question }], 380, (text) =>
+          setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text }]),
+        )
       }
     } catch (e) {
       setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text: `TOT stopped: ${e instanceof Error ? e.message : String(e)}` }])
@@ -263,7 +292,7 @@ export function TotPage() {
                 />
               </label>
               {busy ? (
-                <Action variant="secondary" onClick={() => current?.engine.interruptGenerate()}>
+                <Action variant="secondary" onClick={() => current?.runner.interrupt()}>
                   <Square aria-hidden="true" /> Stop
                 </Action>
               ) : (
@@ -278,8 +307,13 @@ export function TotPage() {
         <div className="grid content-start gap-6">
           <div ref={modelPanel} className="scroll-mt-24">
           <Panel aria-labelledby="tot-model">
-            <PanelHeader id="tot-model" title="Language model" meta="WebLLM · WebGPU" />
+            <PanelHeader id="tot-model" title="Language model" meta={engineKind === 'cpu' ? 'Transformers.js · processor' : 'WebLLM · WebGPU'} />
             <div className="grid gap-3 p-4 text-sm sm:p-5">
+              {engineKind === 'cpu' ? (
+                <p className="text-muted-foreground">
+                  This browser has no WebGPU, so TOT runs <span className="text-foreground font-medium">{CPU_MODEL.name}</span>, a smaller model, on the processor. Answers are shorter and slower: about a minute each, longer on older phones.
+                </p>
+              ) : (
               <label className="grid gap-1">
                 <span className="text-muted-foreground text-xs">Model</span>
                 <select
@@ -304,6 +338,7 @@ export function TotPage() {
                 </select>
                 <span className="text-muted-foreground text-xs">{model.note}</span>
               </label>
+              )}
 
               {status === 'checking' && <p className="text-muted-foreground">Checking this device…</p>}
               {status === 'unsupported' && (
@@ -314,7 +349,7 @@ export function TotPage() {
               {(status === 'idle' || status === 'error') && (
                 <>
                   <p className="text-muted-foreground">
-                    First start downloads about {model.downloadGB} GB once. After that TOT works without internet.
+                    First start downloads about {engineKind === 'cpu' ? CPU_MODEL.downloadGB : model.downloadGB} GB once. After that TOT works without internet.
                   </p>
                   <Action variant="primary" onClick={() => void start()}>
                     <Download aria-hidden="true" /> Start TOT
@@ -336,7 +371,7 @@ export function TotPage() {
               )}
               {status === 'ready' && (
                 <p role="status" className="text-status-ok-ink flex items-center gap-2 font-medium">
-                  <Cpu className="size-4" aria-hidden="true" /> {model.name} running on this device
+                  <Cpu className="size-4" aria-hidden="true" /> {engineKind === 'cpu' ? `${CPU_MODEL.name} running on this device's processor` : `${model.name} running on this device`}
                 </p>
               )}
               <Action variant="secondary" onClick={basicSummary}>

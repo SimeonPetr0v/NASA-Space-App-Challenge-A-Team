@@ -1,3 +1,4 @@
+import type { IndicatorId } from '@/engine/types'
 import type { KnowledgeDoc } from '@/data/tot-knowledge'
 import type { Facts } from './facts'
 
@@ -19,6 +20,48 @@ ${facts.text}
 
 LIBRARY (educational notes, not medical protocols)
 ${library}`
+}
+
+/*
+  Processor backup model (small, slower, more likely to invent): the app
+  writes the "Measured" and "What to do" parts itself from Khonsu's
+  analytics; the model only adds two short sentences of possible
+  explanation, with no numbers, from those findings and one library note.
+*/
+
+const QUESTION_TOPICS: [RegExp, IndicatorId[]][] = [
+  [/heart|pulse|bpm|cardio/i, ['hr']],
+  [/pressure/i, ['bp']],
+  [/oxygen|spo2|breath/i, ['spo2']],
+  [/temp|fever/i, ['temp']],
+  [/sleep|night/i, ['sleep']],
+  [/fatigue|tired|exhaust/i, ['sleep', 'hr', 'exercise', 'mood']],
+  [/exercise|muscle|bone|activity|training/i, ['exercise']],
+  [/mood|stress|feel|wellbeing|well-being/i, ['mood']],
+]
+
+/** Indicators the question is about; empty means a general question (summary, medical officer, biggest changes) */
+export function topicsOf(question: string): IndicatorId[] {
+  return [...new Set(QUESTION_TOPICS.filter(([re]) => re.test(question)).flatMap(([, ids]) => ids))]
+}
+
+/** The rule-based summary lines that answer the question (all of them for a general question) */
+export function measuredFor(question: string, facts: Facts, labels: Record<IndicatorId, string>): string[] {
+  const lines = facts.basic.split('\n').filter((l) => l.trim())
+  const ids = topicsOf(question)
+  const wantsRadiation = /radiation|dose/i.test(question)
+  if (!ids.length && !wantsRadiation) return lines
+  const picked = lines.filter((l) => (wantsRadiation && l.startsWith('Radiation')) || ids.some((id) => l.includes(labels[id])))
+  return picked.length ? picked : [lines[0], ...ids.map((id) => `${labels[id]}: in the usual range.`)]
+}
+
+export function cpuPrompt(measured: string[], doc?: KnowledgeDoc) {
+  return `You are TOT, a health assistant for astronauts. In two short sentences, without any numbers, say what can explain the findings below. Say "can be", never "is". Do not diagnose.
+
+FINDINGS
+${measured.join('\n')}${doc ? `
+
+NOTE: ${doc.text}` : ''}`
 }
 
 export const SUGGESTED = [
