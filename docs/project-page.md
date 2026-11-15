@@ -1,15 +1,12 @@
 # Project page texts (copy into the Space Apps submission form)
 
-Keep these consistent with the README. Replace `ADD-VIDEO-LINK` with the public video link.
+Keep these consistent with the README. (These texts were used for the submission form.)
 
 ## Project name
 Khonsu
 
 ## High-level summary
 On a Mars mission the nearest doctor can be 20 light-minutes away, so astronauts must notice health changes and act on their own. Khonsu is a visual self-check for astronauts: they log a few readings (heart rate, blood pressure, oxygen, temperature, glucose, sleep, mood, exercise, plus radiation dose), and the app compares each with safe ranges and with the astronaut's own baseline. It shows the result at a glance in colour, shape and word, gives the one thing to do now, and says when to tell the crew medical officer or the flight surgeons on Earth — with the real light delay. An on-device AI, TOT, explains the data offline. Khonsu supports self-assessment; it does not diagnose.
-
-## Demo link
-ADD-VIDEO-LINK
 
 ## Final project link
 https://simeonpetr0v.github.io/NASA-Space-App-Challenge-A-Team/

@@ -2,7 +2,7 @@
 
 > NASA Space Apps Challenge 2026 · Challenge: *Create Health Monitoring Software for Astronauts on Space Missions* · Team **A-team**
 
-**Live app:** https://simeonpetr0v.github.io/NASA-Space-App-Challenge-A-Team/ · **Demo video (30 s):** _ADD-VIDEO-LINK_ · **Team:** A-team
+**Live app:** https://simeonpetr0v.github.io/NASA-Space-App-Challenge-A-Team/ · **Demo video (30 s):** on the Space Apps project page · **Team:** A-team
 
 On the way to Mars, the nearest doctor is up to 20 light-minutes away. Khonsu is a visual self-check for astronauts: they log a few health readings, the app compares them with safe ranges **and** with their own personal baseline, shows the result at a glance and says the one thing to do now — and when to tell the crew medical officer or the flight surgeons on Earth. **It supports self-assessment; it does not diagnose.** All crew data in the demo is synthetic.
 
@@ -68,14 +68,7 @@ Build: `npm run build` · Lint: `npm run lint` · Tests: `node --test tests/read
 **Stack:** React 19 + Vite + TypeScript, Tailwind CSS v4 + shadcn/ui (Radix), Motion, three.js with React Three Fiber, WebLLM and Transformers.js for TOT, vite-plugin-pwa. No backend: everything stays on the device (localStorage).
 
 ## Team — A-team
-| Name | Role |
-|---|---|
-| _ADD-NAME_ | Design & UI |
-| _ADD-NAME_ | Design & UI |
-| _ADD-NAME_ | Logic & data |
-| _ADD-NAME_ | Logic & data |
-| _ADD-NAME_ | Science |
-| _ADD-NAME_ | Pitch & video |
+Six members; names and roles are on the Space Apps project page.
 
 ## Use of AI tools
 The idea, scope, science choices and design direction are the team's. AI tools helped as follows:
