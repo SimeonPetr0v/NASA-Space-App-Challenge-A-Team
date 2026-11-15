@@ -46,7 +46,7 @@ const useBottomDock = () =>
   )
 
 /* Arc the planets sit on: centred on "left" (180 deg) at the right edge, on "up" (90 deg) at the bottom */
-const ARC = { right: { centre: 180, spread: 124 }, bottom: { centre: 90, spread: 150 } }
+const ARC = { right: { centre: 180, spread: 124 }, bottom: { centre: 90, spread: 136 } }
 /* After the pointer leaves, the menu stays open this long */
 const LEAVE_MS = 3500
 const BLUR_MS = 250

@@ -4,8 +4,9 @@ import { useEffect, useRef } from 'react'
   Live pulse trace for the measuring screen. Drawn on a canvas every screen
   frame and positioned by time, so it scrolls smoothly even when the camera
   only delivers 15 frames a second. The camera loop pushes raw samples into
-  `feed`; a light real-time filter (slow baseline removed, short smoothing)
-  keeps the sharp upstroke of each beat instead of a soft sine.
+  `feed`; a real-time filter removes the slow baseline and adds the rate at
+  which the fingertip darkens (blood arriving), so each beat shows as a
+  sharp spike rather than a soft wave.
 */
 
 export type TraceFeed = { push: (t: number, red: number, green: number) => void; clear: () => void }
@@ -20,13 +21,19 @@ export function PulseTrace({ feedRef }: { feedRef: React.MutableRefObject<TraceF
     const pts: { t: number; v: number }[] = []
     let base = NaN
     let smooth = 0
+    let lastHp = 0
     let scale = 0
     feedRef.current = {
       push: (t, red, green) => {
         /* Red is saturated on bright screens and torches; then the beat is in green only */
         const x = red > 248 ? green : red + green
-        base = Number.isNaN(base) ? x : base + (x - base) * 0.06
-        smooth += (base - x - smooth) * 0.5
+        base = Number.isNaN(base) ? x : base + (x - base) * 0.1
+        /* Darkening = blood arriving. Its rate of change marks the beat, so it is added on top of the level to draw a sharp spike per beat */
+        const hp = base - x
+        const rise = Math.max(0, hp - lastHp)
+        lastHp = hp
+        const v = 0.35 * hp + 2.2 * rise
+        smooth += (v - smooth) * 0.75
         pts.push({ t, v: smooth })
         while (pts.length && pts[0].t < t - WINDOW_MS - 500) pts.shift()
       },
@@ -34,6 +41,7 @@ export function PulseTrace({ feedRef }: { feedRef: React.MutableRefObject<TraceF
         pts.length = 0
         base = NaN
         smooth = 0
+        lastHp = 0
         scale = 0
       },
     }
@@ -66,7 +74,8 @@ export function PulseTrace({ feedRef }: { feedRef: React.MutableRefObject<TraceF
         scale = Math.max(peak, scale * 0.985)
         if (recent.length > 1 && scale > 0) {
           ctx.lineWidth = 2.5
-          ctx.lineJoin = 'round'
+          ctx.lineJoin = 'miter'
+          ctx.miterLimit = 6
           ctx.lineCap = 'round'
           ctx.beginPath()
           recent.forEach((p, i) => {
