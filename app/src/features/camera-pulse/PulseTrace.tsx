@@ -1,13 +1,13 @@
 import { useEffect, useRef } from 'react'
+import { createBeatFinder } from './beats'
 
 /*
   Live pulse trace for the measuring screen, in the style of the app's
   heartbeat mark: at each heartbeat the camera detects, a beat shape (small
   rise, dip, tall spike, back to the line) whose height follows that beat's
   strength and whose details vary per beat; between beats, the camera
-  signal's real small wobble. Beats are
-  found in real time from how fast the fingertip darkens (blood arriving),
-  so each shape appears when the heart actually beats. It is a picture of
+  signal's real small wobble. Beats are found in real time (beats.ts), so
+  each shape appears when the heart actually beats. It is a picture of
   the beat timing, not an ECG. Drawn on a canvas every screen frame and
   placed by time, so it scrolls smoothly at any camera frame rate.
 */
@@ -15,8 +15,6 @@ import { useEffect, useRef } from 'react'
 export type TraceFeed = { push: (t: number, red: number, green: number) => void; clear: () => void }
 
 const WINDOW_MS = 3000
-/* Beats closer than this are one beat (200 bpm) */
-const REFRACTORY_MS = 300
 /* The beat shape: [ms relative to the beat, height as a share of the half height; up is positive] */
 const BEAT: [number, number][] = [
   [-280, 0],
@@ -31,44 +29,12 @@ export function PulseTrace({ feedRef }: { feedRef: React.MutableRefObject<TraceF
   const canvas = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
-    /* Each beat keeps its own strength (how sharp the darkening was, relative to recent beats) */
-    const beats: { t: number; s: number }[] = []
-    /* The real filtered signal, drawn faintly between beats */
-    const pts: { t: number; v: number }[] = []
-    let base = NaN
-    let lastHp = 0
-    let level = 0
-    let lastBeat = -Infinity
-    let armed = true
+    const finder = createBeatFinder()
+    const { beats, wave: pts } = finder
     feedRef.current = {
-      push: (t, red, green) => {
-        /* Red is saturated on bright screens and torches; then the beat is in green only */
-        const x = red > 248 ? green : red + green
-        base = Number.isNaN(base) ? x : base + (x - base) * 0.1
-        const hp = base - x
-        const rise = Math.max(0, hp - lastHp)
-        lastHp = hp
-        /* Adaptive threshold: half of the recent strongest rise, slowly forgetting */
-        level = Math.max(rise, level * 0.97)
-        pts.push({ t, v: hp })
-        while (pts.length && pts[0].t < t - WINDOW_MS - 500) pts.shift()
-        if (armed && level > 0 && rise > 0.5 * level && t - lastBeat > REFRACTORY_MS) {
-          beats.push({ t, s: Math.min(1.3, rise / level) })
-          lastBeat = t
-          armed = false
-        }
-        if (rise < 0.2 * level) armed = true
-        while (beats.length && beats[0].t < t - WINDOW_MS - 500) beats.shift()
-      },
-      clear: () => {
-        beats.length = 0
-        pts.length = 0
-        base = NaN
-        lastHp = 0
-        level = 0
-        lastBeat = -Infinity
-        armed = true
-      },
+      /* Red is saturated on bright screens and torches; then the beat is in green only */
+      push: (t, red, green) => finder.push(t, red > 248 ? green : red + green),
+      clear: finder.clear,
     }
     let raf = 0
     const draw = () => {
