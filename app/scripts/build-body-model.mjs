@@ -81,7 +81,7 @@ const readElements = (dir, ids) => {
   for (const id of [...new Set(ids)]) {
     const part = readObj(join_(dir, 'obj', `${id}.obj`))
     const offset = positions.length / 3
-    positions.push(...part.positions)
+    for (const v of part.positions) positions.push(v)
     for (const i of part.indices) indices.push(i + offset)
   }
   return { positions, indices }
