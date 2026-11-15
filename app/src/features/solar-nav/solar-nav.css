@@ -467,6 +467,43 @@
   transform: translate(0, 0);
 }
 
+/* Curved labels at the bottom: the name follows the top of its bubble, text only */
+.solar-arc-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--planet) * 80 / 42);
+  height: calc(var(--planet) * 80 / 42);
+  transform: translate(-50%, -50%);
+  overflow: visible;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms var(--ease);
+}
+.solar-arc-label text {
+  fill: var(--foreground);
+  font-family: var(--font-display);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  stroke: var(--background);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
+.solar-link[aria-current='page'] .solar-arc-label text {
+  fill: var(--primary);
+}
+.solar[data-dock='bottom'][data-open='true'] .solar-arc-label {
+  opacity: 1;
+  transition-delay: calc(var(--n) * var(--step-in) + var(--emerge));
+}
+.solar[data-open='false'] .solar-arc-label {
+  transition-delay: 0ms;
+  transition-duration: 120ms;
+}
+
 /* Where the sun is at the bottom it replaces the bottom bar */
 @media (max-width: 639px), (max-width: 1023px) and (orientation: portrait) {
   .kh-mobile-nav {

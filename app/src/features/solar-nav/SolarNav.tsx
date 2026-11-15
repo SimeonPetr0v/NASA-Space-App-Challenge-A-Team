@@ -50,6 +50,14 @@ const ARC = { right: { centre: 180, spread: 124 }, bottom: { centre: 90, spread:
 /* After the pointer leaves, the menu stays open this long */
 const LEAVE_MS = 3500
 const BLUR_MS = 250
+/* Circle around a bubble for the curved label: from lower left, over the top, to lower right (radius 29 in an 80 x 80 box) */
+const ARC_PATH = (() => {
+  const r = 29
+  const a = (25 * Math.PI) / 180
+  const x = (r * Math.cos(a)).toFixed(2)
+  const y = (r * Math.sin(a)).toFixed(2)
+  return `M -${x} ${y} A ${r} ${r} 0 1 1 ${x} ${y}`
+})()
 
 export function SolarNav({ route }: { route: Route }) {
   const theme = useStore().theme
@@ -189,7 +197,19 @@ export function SolarNav({ route }: { route: Route }) {
                 <span className="solar-icon" aria-hidden="true">
                   <Icon strokeWidth={1.75} />
                 </span>
-                <span className="solar-label">{bottom ? p.short : p.label}</span>
+                {bottom ? (
+                  /* At the bottom the name curves over the top of its bubble, no box */
+                  <svg className="solar-arc-label" viewBox="-40 -40 80 80" aria-hidden="true">
+                    <path id={`${id}-arc-${i}`} d={ARC_PATH} fill="none" />
+                    <text>
+                      <textPath href={`#${id}-arc-${i}`} startOffset="50%" textAnchor="middle">
+                        {p.short}
+                      </textPath>
+                    </text>
+                  </svg>
+                ) : (
+                  <span className="solar-label">{p.label}</span>
+                )}
               </a>
             </li>
           )
