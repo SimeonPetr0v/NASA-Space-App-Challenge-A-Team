@@ -65,23 +65,24 @@ export function BodyExplorer({ readings, assessments, theme }: Props) {
             <p className="text-muted-foreground p-4 text-sm">3D view is not available on this device. Use the body systems list.</p>
           )}
         </div>
-        {FEATURES.bodyTimeline && webgl && (
-          <>
-            <div className="absolute top-3 right-3 z-20">
+        {/* One row for the top buttons: side by side when there is room, wrapped on narrow phones, never on top of each other */}
+        <div className="pointer-events-none absolute inset-x-3 top-3 z-20 flex flex-wrap items-start gap-2 [&>*]:pointer-events-auto">
+          {selected && (
+            <button
+              type="button"
+              className="bg-card border-border-strong hover:bg-muted flex min-h-11 items-center gap-2 rounded-sm border px-3 text-sm font-medium"
+              onClick={() => setSelected(null)}
+            >
+              <ArrowLeft className="size-4" aria-hidden="true" /> Whole body
+            </button>
+          )}
+          {FEATURES.bodyTimeline && webgl && (
+            <div className="ml-auto">
               <BodyTimelineToggle day={timelineDay} onChange={setTimelineDay} />
             </div>
-            <BodyTimelinePanel day={timelineDay} onChange={setTimelineDay} />
-          </>
-        )}
-        {selected && (
-          <button
-            type="button"
-            className="bg-card border-border-strong hover:bg-muted absolute top-3 left-3 flex min-h-11 items-center gap-2 rounded-sm border px-3 text-sm font-medium"
-            onClick={() => setSelected(null)}
-          >
-            <ArrowLeft className="size-4" aria-hidden="true" /> Whole body
-          </button>
-        )}
+          )}
+        </div>
+        {FEATURES.bodyTimeline && webgl && <BodyTimelinePanel day={timelineDay} onChange={setTimelineDay} />}
         <p className="label text-subtle-foreground pointer-events-none absolute bottom-3 left-4 hidden sm:block">Drag to rotate · scroll to zoom</p>
         <p className="text-subtle-foreground absolute right-3 bottom-3 max-w-[60%] text-right text-[10px] leading-snug">
           Model:{' '}
