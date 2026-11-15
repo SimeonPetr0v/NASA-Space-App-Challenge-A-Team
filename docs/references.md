@@ -8,7 +8,7 @@ Every external resource used in the project (required by the submission form, ev
 | NASA HRP — Risks of Human Spaceflight | NASA resource | https://www.nasa.gov/hrp/risks/ | Public | Indicator ↔ risk mapping |
 | American Heart Association — Understanding Blood Pressure Readings | Public health source | https://www.heart.org/bplevels | Public | Blood pressure categories |
 | American Heart Association — Low Blood Pressure | Public health source | https://www.heart.org/en/health-topics/high-blood-pressure/the-facts-about-high-blood-pressure/low-blood-pressure-when-blood-pressure-is-too-low | Public | Low blood pressure context |
-| American Heart Association — Target Heart Rates | Public health source | https://www.heart.org/en/healthy-living/fitness/fitness-basics/target-heart-rates | Public | Resting heart rate reference |
+| American Heart Association — Target Heart Rates | Public health source | https://www.heart.org/en/healthy-living/exercise-and-physical-activity/fitness-basics/target-heart-rates | Public | Resting heart rate reference |
 | American Diabetes Association — Diabetes Diagnosis | Public health source | https://diabetes.org/about-diabetes/diagnosis | Public | Fasting glucose interpretation |
 | ADA Standards of Care in Diabetes — 2020, Table 6.4 | Journal article | https://pmc.ncbi.nlm.nih.gov/articles/PMC6969656/table/T6_4/ | Public | Hypoglycemia levels |
 | MedlinePlus — Body Temperature Norms | Medical reference | https://medlineplus.gov/ency/article/001982.htm | Public | Adult temperature reference |
