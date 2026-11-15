@@ -18,6 +18,7 @@ import { ALL_EXTENSIONS, EXTMeshoptCompression } from '@gltf-transform/extension
 import { flatten, getBounds, join, normals, prune, quantize, simplifyPrimitive, weld, weldPrimitive } from '@gltf-transform/functions'
 import { MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer'
 import { slimSkin, smoothGroin } from './slim-skin.mjs'
+import { bp3dArm, insideTester, weldMesh } from "./bp3d-arms.mjs"
 
 const input = process.argv[2]
 if (!input) {
@@ -81,7 +82,7 @@ const readElements = (dir, ids) => {
   for (const id of [...new Set(ids)]) {
     const part = readObj(join_(dir, 'obj', `${id}.obj`))
     const offset = positions.length / 3
-    positions.push(...part.positions)
+    for (const v of part.positions) positions.push(v)
     for (const i of part.indices) indices.push(i + offset)
   }
   return { positions, indices }
@@ -162,7 +163,94 @@ async function addBodyParts3D(dir) {
 
   const rib = readGroup(dir, ["ids_FMA7480.txt"])
   const bpLungs = boundsOf(toYUp(lungs.positions, mirrorX))
-  addPart("ribcage", mapBounds(toYUp(rib.positions, mirrorX), bpLungs, hraLungs), rib.indices, "musculoskeletal", 22000)
+  const hraSkinPts = []
+  for (const n of nodesOf("whole-body")) {
+    const m = n.getWorldMatrix()
+    for (const p of n.getMesh().listPrimitives()) {
+      const a = p.getAttribute("POSITION")
+      const v = [0, 0, 0]
+      for (let i = 0; i < a.getCount(); i++) {
+        a.getElement(i, v)
+        hraSkinPts.push(m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12], m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13], m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14])
+      }
+    }
+  }
+  /*
+    The rib cage is placed by the lungs, but the BodyParts3D chest is deeper
+    in front than ours, so the sternum and rib fronts came out through the
+    skin. Per 1 cm height slice, the front half of the rib cage (in front of
+    its middle) is pressed back so its front stays RIB_TISSUE behind the
+    chest skin; the back half does not move.
+  */
+  const ribPos = mapBounds(toYUp(rib.positions, mirrorX), bpLungs, hraLungs)
+  /*
+    The lungs end well above the bottom of a real rib cage, so the cage is
+    stretched down (top fixed) until its lowest rib is RIB_ABOVE_HIP above
+    our iliac crest (highest hip bone point beside the spine).
+  */
+  {
+    const RIB_ABOVE_HIP = 0.08
+    let crest = -Infinity
+    for (const n of nodesOf("musculoskeletal")) {
+      const m = n.getWorldMatrix()
+      for (const p of n.getMesh().listPrimitives()) {
+        const a = p.getAttribute("POSITION")
+        const v = [0, 0, 0]
+        for (let i = 0; i < a.getCount(); i++) {
+          a.getElement(i, v)
+          const x = m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12]
+          const y = m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13]
+          if (Math.abs(x) > 0.07 && y < hraLungs.min[1]) crest = Math.max(crest, y)
+        }
+      }
+    }
+    const rb = boundsOf(ribPos)
+    const k = (rb.max[1] - (crest + RIB_ABOVE_HIP)) / (rb.max[1] - rb.min[1])
+    if (k > 1) for (let i = 1; i < ribPos.length; i += 3) ribPos[i] = rb.max[1] - (rb.max[1] - ribPos[i]) * k
+    console.log(`rib cage: iliac crest ${crest.toFixed(3)} m, bottom ${rb.min[1].toFixed(3)} -> ${(rb.max[1] - (rb.max[1] - rb.min[1]) * Math.max(1, k)).toFixed(3)} m (x${k.toFixed(2)} tall)`)
+  }
+  {
+    const RIB_TISSUE = 0.016
+    const rb = boundsOf(ribPos)
+    const zMid = (rb.min[2] + rb.max[2]) / 2
+    const y0 = Math.floor(rb.min[1] * 100)
+    const n = Math.floor(rb.max[1] * 100) - y0 + 1
+    const skinFront = Array(n).fill(-Infinity)
+    const ribFront = Array(n).fill(-Infinity)
+    for (let i = 0; i < hraSkinPts.length; i += 3) {
+      const k = Math.floor(hraSkinPts[i + 1] * 100) - y0
+      /* Front skin only; each point counts for its slice and the two next to it (the skin mesh is sparse) */
+      if (Math.abs(hraSkinPts[i]) >= 0.06 || hraSkinPts[i + 2] <= 0) continue
+      for (let j = Math.max(0, k - 1); j <= Math.min(n - 1, k + 1); j++) skinFront[j] = Math.max(skinFront[j], hraSkinPts[i + 2])
+    }
+    for (let i = 0; i < ribPos.length; i += 3) {
+      const k = Math.floor(ribPos[i + 1] * 100) - y0
+      ribFront[k] = Math.max(ribFront[k], ribPos[i + 2])
+    }
+    /* Squeeze factor per slice: lowest within +-1 cm, then averaged over +-2 cm so the cage stays smooth */
+    const raw = ribFront.map((f, k) => (f > zMid && Number.isFinite(skinFront[k]) ? Math.max(0.5, Math.min(1, (skinFront[k] - RIB_TISSUE - zMid) / (f - zMid))) : 1))
+    const squeeze = raw.map((_, k) => {
+      let m = 1
+      for (let j = Math.max(0, k - 1); j <= Math.min(n - 1, k + 1); j++) m = Math.min(m, raw[j])
+      return m
+    })
+    const smooth = squeeze.map((_, k) => {
+      let t = 0
+      let c = 0
+      for (let j = Math.max(0, k - 2); j <= Math.min(n - 1, k + 2); j++) {
+        t += squeeze[j]
+        c++
+      }
+      return t / c
+    })
+    for (let i = 0; i < ribPos.length; i += 3) {
+      if (ribPos[i + 2] <= zMid) continue
+      const k = Math.floor(ribPos[i + 1] * 100) - y0
+      ribPos[i + 2] = zMid + (ribPos[i + 2] - zMid) * smooth[k]
+    }
+    console.log(`rib cage front pressed back: depth x${Math.min(...smooth).toFixed(2)} at most`)
+  }
+  addPart("ribcage", ribPos, rib.indices, "musculoskeletal", 22000)
 
   doc.createMaterial("heart:artery").setBaseColorFactor([0.7, 0.08, 0.1, 1]).setRoughnessFactor(0.4).setMetallicFactor(0)
   doc.createMaterial("heart:vein").setBaseColorFactor([0.2, 0.25, 0.6, 1]).setRoughnessFactor(0.4).setMetallicFactor(0)
@@ -187,501 +275,114 @@ async function addBodyParts3D(dir) {
 
   const skull = concepts("FMA46565")
   const jaw = concepts("FMA52748")
-  const bpHead = boundsOf(yUp(concepts("FMA50801", "FMA12514", "FMA12515")))
-  const hraHead = unionBounds([...nodesOf("brain"), ...nodesOf("eyes")])
-  addPart("skull", mapBounds(yUp(skull), bpHead, hraHead), skull.indices, "musculoskeletal", 16000)
-  addPart("mandible", mapBounds(yUp(jaw), bpHead, hraHead), jaw.indices, "musculoskeletal", 3000)
+  /*
+    The skull is placed by matching the BodyParts3D skin head (which fits its
+    own skull) onto our skin head: nose tip, back of the head and width
+    above the ears (BodyParts3D ears lie flatter than ours).
+    Height: nose tip to crown.
+  */
+  const bpSkinRaw = readElements(dir, ["FJ2810"])
+  const headMarks = (pts) => {
+    const b = boundsOf(pts)
+    const H = b.max[1] - b.min[1]
+    const crown = b.max[1]
+    const band = (lo, hi, f) => {
+      for (let i = 0; i < pts.length; i += 3) if (pts[i + 1] <= crown - lo * H && pts[i + 1] >= crown - hi * H) f(pts[i], pts[i + 1], pts[i + 2])
+    }
+    let nose = [0, 0, -Infinity]
+    band(0.05, 0.1, (x, y, z) => {
+      if (z > nose[2]) nose = [x, y, z]
+    })
+    let back = Infinity
+    band(0.02, 0.08, (x, y, z) => (back = Math.min(back, z)))
+    let x0 = Infinity
+    let x1 = -Infinity
+    band(0.015, 0.045, (x) => {
+      x0 = Math.min(x0, x)
+      x1 = Math.max(x1, x)
+    })
+    return { nose, back, x0, x1, crown }
+  }
+  const bpMarks = headMarks(yUp(bpSkinRaw))
+  const hraMarks = headMarks(hraSkinPts)
+  const sx = (hraMarks.x1 - hraMarks.x0) / (bpMarks.x1 - bpMarks.x0)
+  /* 2 % shorter front to back than the skins, so the back of the skull stays inside */
+  const sz = (0.98 * (hraMarks.nose[2] - hraMarks.back)) / (bpMarks.nose[2] - bpMarks.back)
+  const sy = (hraMarks.crown - hraMarks.nose[1]) / (bpMarks.crown - bpMarks.nose[1])
+  /* Tilted back around the nose tip, as our skin's forehead slopes back more */
+  const TILT = (4 * Math.PI) / 180
+  const headMap = (g) => {
+    const p = yUp(g)
+    const out = new Float32Array(p.length)
+    for (let i = 0; i < p.length; i += 3) {
+      out[i] = (hraMarks.x0 + hraMarks.x1) / 2 + (p[i] - (bpMarks.x0 + bpMarks.x1) / 2) * sx
+      const dy = (p[i + 1] - bpMarks.nose[1]) * sy
+      const dz = (p[i + 2] - bpMarks.nose[2]) * sz
+      out[i + 1] = hraMarks.nose[1] + dy * Math.cos(TILT) + dz * Math.sin(TILT)
+      out[i + 2] = hraMarks.nose[2] + dz * Math.cos(TILT) - dy * Math.sin(TILT)
+    }
+    return out
+  }
+  console.log(`skull fit: scale x ${(sx * 1000).toFixed(3)} y ${(sy * 1000).toFixed(3)} z ${(sz * 1000).toFixed(3)} (m per m); nose tip ${hraMarks.nose.map((v) => v.toFixed(3)).join(", ")}`)
+  addPart("skull", headMap(skull), skull.indices, "musculoskeletal", 16000)
+  addPart("mandible", headMap(jaw), jaw.indices, "musculoskeletal", 3000)
 
   /*
-    Our skin holds the arms further from the body than BodyParts3D does, so each
-    arm + hand is fitted to its own skin arm: the shoulder end stays where the
-    lungs mapping puts it, and the bone chain is stretched until the fingertips
-    sit just inside the skin's outermost and lowest hand points.
+    Arms: skin and bones both from BodyParts3D, posed into our skin's arm
+    pose and stitched onto our skin at the shoulder (see bp3d-arms.mjs).
+    Our skin is rebuilt as one new node in world space.
   */
-  const skin = []
-  for (const n of nodesOf("whole-body")) {
+  const skinNodes = nodesOf("whole-body")
+  let skinMesh = { pos: [], idx: [] }
+  for (const n of skinNodes) {
     const m = n.getWorldMatrix()
     for (const p of n.getMesh().listPrimitives()) {
       const a = p.getAttribute("POSITION")
+      const ind = p.getIndices()
+      const offset = skinMesh.pos.length / 3
       const v = [0, 0, 0]
       for (let i = 0; i < a.getCount(); i++) {
         a.getElement(i, v)
-        skin.push(
-          m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12],
-          m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13],
-          m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14],
-        )
+        skinMesh.pos.push(m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12], m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13], m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14])
       }
+      const count = ind ? ind.getCount() : a.getCount()
+      for (let i = 0; i < count; i++) skinMesh.idx.push(offset + (ind ? ind.getScalar(i) : i))
     }
   }
-  const SOFT_TISSUE = 0.012
-  /*
-    Exact inside-the-skin test for fitting the arm and hand bones: the skin
-    triangles are bucketed in 2 cm height slabs, and a point is inside when a
-    ray from it toward +x crosses the closed skin surface an odd number of
-    times.
-  */
-  const SLAB = 0.02
-  const skinTri = []
-  const slabs = new Map()
-  for (const n of nodesOf("whole-body")) {
-    const m = n.getWorldMatrix()
-    for (const p of n.getMesh().listPrimitives()) {
-      const a = p.getAttribute("POSITION")
-      const idx = p.getIndices()
-      const count = idx ? idx.getCount() : a.getCount()
-      const v = [0, 0, 0]
-      const world = (i) => {
-        a.getElement(i, v)
-        return [m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12], m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13], m[2] * v[0] + m[6] * v[1] + m[10] * v[2] + m[14]]
-      }
-      for (let t = 0; t < count; t += 3) {
-        const tri = [0, 1, 2].map((j) => world(idx ? idx.getScalar(t + j) : t + j))
-        const id = skinTri.length
-        skinTri.push(tri)
-        const y0 = Math.min(tri[0][1], tri[1][1], tri[2][1])
-        const y1 = Math.max(tri[0][1], tri[1][1], tri[2][1])
-        for (let k = Math.floor(y0 / SLAB); k <= Math.floor(y1 / SLAB); k++) {
-          if (!slabs.has(k)) slabs.set(k, [])
-          slabs.get(k).push(id)
-        }
-      }
-    }
-  }
-  const insideSkin = (x, y, z) => {
-    let crossings = 0
-    for (const id of slabs.get(Math.floor(y / SLAB)) ?? []) {
-      const [A, B, C] = skinTri[id]
-      const det = (B[1] - A[1]) * (C[2] - A[2]) - (C[1] - A[1]) * (B[2] - A[2])
-      if (!det) continue
-      const l1 = ((y - A[1]) * (C[2] - A[2]) - (C[1] - A[1]) * (z - A[2])) / det
-      const l2 = ((B[1] - A[1]) * (z - A[2]) - (y - A[1]) * (B[2] - A[2])) / det
-      if (l1 < 0 || l2 < 0 || l1 + l2 > 1) continue
-      if (A[0] + l1 * (B[0] - A[0]) + l2 * (C[0] - A[0]) > x) crossings++
-    }
-    return crossings % 2 === 1
-  }
-  /* Share of (up to max) sampled points of the given position arrays that lie inside the skin */
-  const insideShare = (arrays, max = 700) => {
-    const total = arrays.reduce((t, a) => t + a.length / 3, 0)
-    const step = Math.max(1, Math.floor(total / max))
-    let hit = 0
-    let n = 0
-    let k = 0
-    for (const arr of arrays)
-      for (let i = 0; i < arr.length; i += 3, k++) {
-        if (k % step) continue
-        n++
-        if (insideSkin(arr[i], arr[i + 1], arr[i + 2])) hit++
-      }
-    return hit / Math.max(1, n)
-  }
-  /*
-    Then each arm is fitted as a jointed chain, so the bones keep their real
-    shape. The upper arm (humerus), the forearm (radius + ulna) and the hand
-    each move as one rigid piece, stretched only along their own length:
-    - the hand is fitted into the skin hand (one scale per axis) and its
-      spread fingers are drawn in smoothly toward the tips;
-    - the shoulder end of the humerus stays where the lungs mapping put it;
-    - the elbow is placed on the centre line of the skin arm, splitting the
-      shoulder-to-wrist distance in the bones' own length ratio;
-    - the humerus runs shoulder -> elbow and the forearm elbow -> wrist.
-    The skin arm per 1 cm slice is the outermost connected run of skin
-    points, cut off at the gap to the torso.
-  */
-  const fitArmJointed = (humPos, forePos, handPos, sign) => {
-    const all = [...humPos, ...forePos, ...handPos]
-    const ab = boundsOf(all)
-    const y0 = Math.floor(ab.min[1] * 100)
-    const n = Math.floor(ab.max[1] * 100) - y0 + 1
-    const flesh = Array.from({ length: n }, () => null)
-    const bySlice = Array.from({ length: n }, () => [])
-    for (let i = 0; i < skin.length; i += 3) {
-      if (skin[i] * sign <= 0.1) continue
-      const k = Math.floor(skin[i + 1] * 100) - y0
-      for (let j = Math.max(0, k - 2); j <= Math.min(n - 1, k + 2); j++) bySlice[j].push(skin[i], skin[i + 2])
-    }
-    bySlice.forEach((pts, k) => {
-      const order = []
-      for (let i = 0; i < pts.length; i += 2) order.push(i)
-      order.sort((a, b) => pts[b] * sign - pts[a] * sign)
-      const f = { x0: Infinity, x1: -Infinity, z0: Infinity, z1: -Infinity }
-      let last = Infinity
-      for (const i of order) {
-        const d = pts[i] * sign
-        if (last !== Infinity && last - d > 0.04) break
-        last = d
-        f.x0 = Math.min(f.x0, pts[i])
-        f.x1 = Math.max(f.x1, pts[i])
-        f.z0 = Math.min(f.z0, pts[i + 1])
-        f.z1 = Math.max(f.z1, pts[i + 1])
-      }
-      if (Number.isFinite(f.x0) && f.x1 - f.x0 <= 0.22) flesh[k] = f
-    })
-    const sliceAt = (y) => flesh[Math.min(n - 1, Math.max(0, Math.floor(y * 100) - y0))]
-
-    /* Centre of the vertices within 1.5 cm of a segment's top or bottom end */
-    const endCentre = (pos, top) => {
-      const b = boundsOf(pos)
-      const c = [0, 0, 0]
-      let m = 0
-      for (let i = 0; i < pos.length; i += 3) {
-        if (top ? pos[i + 1] < b.max[1] - 0.015 : pos[i + 1] > b.min[1] + 0.015) continue
-        c[0] += pos[i]
-        c[1] += pos[i + 1]
-        c[2] += pos[i + 2]
-        m++
-      }
-      return c.map((v) => v / m)
-    }
-    const sub = (a, b) => a.map((v, i) => v - b[i])
-    const add = (a, b) => a.map((v, i) => v + b[i])
-    const mul = (a, k) => a.map((v) => v * k)
-    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-    const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
-    const len = (a) => Math.hypot(...a)
-    const unit = (a) => mul(a, 1 / (len(a) || 1))
-    /* Rotation taking unit vector u onto unit vector v (Rodrigues) */
-    const rotation = (u, v) => {
-      const axis = cross(u, v)
-      const s = len(axis)
-      const c = dot(u, v)
-      if (s < 1e-9) return (p) => p
-      const k = mul(axis, 1 / s)
-      return (p) => add(add(mul(p, c), mul(cross(k, p), s)), mul(k, dot(k, p) * (1 - c)))
-    }
-    /* Move a rigid segment so a0 -> a1 and b0 -> b1, stretching only along its own axis */
-    const place = (pos, a0, b0, a1, b1) => {
-      const u0 = unit(sub(b0, a0))
-      const u1 = unit(sub(b1, a1))
-      const k = len(sub(b1, a1)) / len(sub(b0, a0))
-      const rot = rotation(u0, u1)
-      const out = new Float32Array(pos.length)
-      for (let i = 0; i < pos.length; i += 3) {
-        const d = [pos[i] - a0[0], pos[i + 1] - a0[1], pos[i + 2] - a0[2]]
-        const along = dot(d, u0)
-        const local = add(mul(u0, along * k), sub(d, mul(u0, along)))
-        out.set(add(a1, rot(local)), i)
-      }
-      return out
-    }
-
-    /*
-      Hand: fitted as one piece along the skin hand's own axes. For the skin
-      hand and the bone hand we measure the long axis (wrist -> fingertips),
-      the width axis (thumb side <-> little finger, the main spread across
-      the long axis) and the thickness axis. The bone hand is rotated onto
-      the skin hand's axes and scaled to its length, width and thickness
-      (5th-95th percentile, minus a little soft tissue), so the fingers point
-      where the skin fingers point and never leave the skin.
-    */
-    const hb = boundsOf(handPos)
-    /*
-      The skin wrist: the narrowest cross-section of the skin arm between 12
-      and 30 cm above the skin fingertips. The bone wrist goes there and the
-      bone fingertips just inside the skin fingertips; the forearm then
-      stretches to meet the wrist, so the arm may get a little longer.
-    */
-    let low = Infinity
-    for (let i = 0; i < skin.length; i += 3) {
-      if (skin[i] * sign >= 0.27 && skin[i + 1] < hb.max[1] + 0.1 && skin[i + 1] > hb.min[1] - 0.08) low = Math.min(low, skin[i + 1])
-    }
-    let wristY = hb.max[1]
-    let narrowest = Infinity
-    for (let y = low + 0.12; y <= low + 0.3; y += 0.005) {
-      const f = sliceAt(y)
-      if (!f) continue
-      const area = (f.x1 - f.x0) * (f.z1 - f.z0)
-      if (area < narrowest) {
-        narrowest = area
-        wristY = y
-      }
-    }
-    const skinHand = []
-    for (let i = 0; i < skin.length; i += 3) {
-      if (skin[i] * sign < 0.27 || skin[i + 1] > wristY || skin[i + 1] < hb.min[1] - 0.08) continue
-      skinHand.push(skin[i], skin[i + 1], skin[i + 2])
-    }
-    console.log(`skin wrist ${sign > 0 ? 'left' : 'right'}: ${wristY.toFixed(3)} m (bone wrist was ${hb.max[1].toFixed(3)}), skin hand length ${(wristY - low).toFixed(3)} m`)
-    const frameOf = (pos) => {
-      const b = boundsOf(pos)
-      const top = endCentre(pos, true)
-      const tip = endCentre(pos, false)
-      const e1 = unit(sub(tip, top))
-      const cov = [0, 0, 0, 0, 0, 0, 0, 0, 0]
-      let m = 0
-      for (let i = 0; i < pos.length; i += 3) {
-        const d = sub([pos[i], pos[i + 1], pos[i + 2]], top)
-        const r = sub(d, mul(e1, dot(d, e1)))
-        for (let a = 0; a < 3; a++) for (let c = 0; c < 3; c++) cov[a * 3 + c] += r[a] * r[c]
-        m++
-      }
-      let e2 = [1, 0, 0]
-      for (let k = 0; k < 40; k++) {
-        const v = [0, 1, 2].map((a) => cov[a * 3] * e2[0] + cov[a * 3 + 1] * e2[1] + cov[a * 3 + 2] * e2[2])
-        e2 = unit(sub(v, mul(e1, dot(v, e1))))
-      }
-      if (e2[0] * sign < 0) e2 = mul(e2, -1)
-      const e3 = cross(e1, e2)
-      const coords = [[], [], []]
-      for (let i = 0; i < pos.length; i += 3) {
-        const d = sub([pos[i], pos[i + 1], pos[i + 2]], top)
-        coords[0].push(dot(d, e1))
-        coords[1].push(dot(d, e2))
-        coords[2].push(dot(d, e3))
-      }
-      const pct = (xs, q) => {
-        const s = [...xs].sort((x, y) => x - y)
-        return s[Math.min(s.length - 1, Math.max(0, Math.round(q * (s.length - 1))))]
-      }
-      const range = coords.map((c, a) => (a === 0 ? [0, pct(c, 0.995)] : [pct(c, 0.05), pct(c, 0.95)]))
-      void b
-      return { top, axes: [e1, e2, e3], range }
-    }
-    const bf = frameOf(handPos)
-    const sf = frameOf(skinHand)
-    const TISSUE = [0.005, 0.008, 0.006]
-    const fit = [0, 1, 2].map((a) => {
-      const [b0, b1] = bf.range[a]
-      const [s0, s1] = sf.range[a]
-      const lenS = a === 0 ? s1 - s0 - TISSUE[0] : s1 - s0 - 2 * TISSUE[a]
-      /* Length keeps the bone hand's proportions (0.9-1.15x) and lines the fingertips up with the skin fingertips; the wrist follows */
-      const k = a === 0 ? Math.min(1.15, Math.max(0.9, lenS / Math.max(1e-6, b1 - b0))) : Math.min(1.15, Math.max(0.3, lenS / Math.max(1e-6, b1 - b0)))
-      const mid = a === 0 ? lenS - b1 * k : (s0 + s1) / 2 - ((b0 + b1) / 2) * k
-      return { k, mid }
-    })
-    const hand = new Float32Array(handPos.length)
-    for (let i = 0; i < handPos.length; i += 3) {
-      const d = sub([handPos[i], handPos[i + 1], handPos[i + 2]], bf.top)
-      let p = sf.top
-      for (let a = 0; a < 3; a++) p = add(p, mul(sf.axes[a], dot(d, bf.axes[a]) * fit[a].k + fit[a].mid))
-      hand.set(p, i)
-    }
-    /*
-      Then the bone hand is bent smoothly onto the skin hand (see below):
-      the BodyParts3D hand is posed with curled, fanned fingers while the
-      skin hand is flat and open, which no rigid turn can match.
-    */
-    {
-      const [u, wv, nv] = sf.axes
-      const top = sf.top
-      const toPlane = (arr) => {
-        const out = []
-        for (let i = 0; i < arr.length; i += 3) {
-          const d = sub([arr[i], arr[i + 1], arr[i + 2]], top)
-          out.push([dot(d, u), dot(d, wv), dot(d, nv)])
-        }
-        return out
-      }
-      const skinPts = toPlane(skinHand)
-      const bonePts = toPlane(hand)
-      const lenOf = (pts) => pts.reduce((m, p) => Math.max(m, p[0]), 0)
-      const Lb = lenOf(bonePts)
-      /*
-        Along the hand's length (a), in 16 bands, the centre and half-width of
-        the skin hand and of the bone hand are measured across (b) and through
-        (c) the hand (5th-95th percentile). Smooth quadratic curves are fitted
-        to them, and every bone point is moved so its band's centre and width
-        match the skin's. One smooth curve over the whole length, so fingers
-        stay connected; it straightens the forward curl of the bone fingers
-        and lines them up with the skin fingers.
-      */
-      const BANDS = 16
-      const L = Math.max(Lb, 1e-6)
-      const bandStats = (pts) => {
-        const rows = []
-        for (let k = 0; k < BANDS; k++) {
-          const lo = (k / BANDS) * L
-          const hi = ((k + 1) / BANDS) * L
-          const f = pts.filter((q) => q[0] >= lo && q[0] < hi)
-          if (f.length < 8) continue
-          const pc = (axis, t) => {
-            const v = f.map((q) => q[axis]).sort((x, y) => x - y)
-            return v[Math.min(v.length - 1, Math.max(0, Math.round(t * (v.length - 1))))]
-          }
-          const b5 = pc(1, 0.05)
-          const b95 = pc(1, 0.95)
-          const c5 = pc(2, 0.05)
-          const c95 = pc(2, 0.95)
-          rows.push({ a: (lo + hi) / 2, n: f.length, cb: (b5 + b95) / 2, hb: (b95 - b5) / 2, cc: (c5 + c95) / 2, hc: (c95 - c5) / 2 })
-        }
-        return rows
-      }
-      /* Weighted least-squares quadratic y = k0 + k1 a + k2 a^2 */
-      const quad = (rows, key) => {
-        const S = Array(5).fill(0)
-        const T = Array(3).fill(0)
-        for (const r of rows) {
-          const w = Math.sqrt(r.n)
-          let ap = 1
-          for (let e = 0; e < 5; e++) {
-            S[e] += w * ap
-            if (e < 3) T[e] += w * ap * r[key]
-            ap *= r.a
-          }
-        }
-        const M = [
-          [S[0], S[1], S[2], T[0]],
-          [S[1], S[2], S[3], T[1]],
-          [S[2], S[3], S[4], T[2]],
-        ]
-        for (let i = 0; i < 3; i++) {
-          let piv = i
-          for (let j = i + 1; j < 3; j++) if (Math.abs(M[j][i]) > Math.abs(M[piv][i])) piv = j
-          ;[M[i], M[piv]] = [M[piv], M[i]]
-          for (let j = 0; j < 3; j++) {
-            if (j === i || !M[i][i]) continue
-            const f = M[j][i] / M[i][i]
-            for (let k = i; k < 4; k++) M[j][k] -= f * M[i][k]
-          }
-        }
-        const k = M.map((row, i) => (row[i] ? row[3] / row[i] : 0))
-        return (x) => k[0] + k[1] * x + k[2] * x * x
-      }
-      const skinRows = bandStats(skinPts.filter((q) => q[0] <= L))
-      const boneRows = bandStats(bonePts)
-      const sCb = quad(skinRows, 'cb')
-      const sHb = quad(skinRows, 'hb')
-      const sCc = quad(skinRows, 'cc')
-      const sHc = quad(skinRows, 'hc')
-      const bCb = quad(boneRows, 'cb')
-      const bHb = quad(boneRows, 'hb')
-      const bCc = quad(boneRows, 'cc')
-      const bHc = quad(boneRows, 'hc')
-      const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x))
-      const INSET_B = 0.006
-      const INSET_C = 0.005
-      bonePts.forEach((q, k) => {
-        const x = clamp(q[0], 0, L)
-        const kb = clamp((sHb(x) - INSET_B) / Math.max(1e-4, bHb(x)), 0.55, 1.1)
-        const kc = clamp((sHc(x) - INSET_C) / Math.max(1e-4, bHc(x)), 0.55, 1.1)
-        const b2 = sCb(x) + (q[1] - bCb(x)) * kb
-        const c2 = sCc(x) + (q[2] - bCc(x)) * kc
-        hand.set(add(add(add(top, mul(u, q[0])), mul(wv, b2)), mul(nv, c2)), k * 3)
-      })
-      let off = 0
-      for (const q of bonePts) if (q[0] > 0.5 * L) off++
-      console.log(`finger fit ${sign > 0 ? 'left' : 'right'}: bent along ${BANDS} bands (${skinRows.length} skin, ${boneRows.length} bone) onto the skin hand; ${off} finger points`)
-    }
-    console.log(`hand fit ${sign > 0 ? 'left' : 'right'}: scale ${fit.map((f) => f.k.toFixed(2)).join(' / ')}, skin axis ${sf.axes[0].map((v) => v.toFixed(2)).join(', ')}, bone axis ${bf.axes[0].map((v) => v.toFixed(2)).join(', ')}`)
-
-    /*
-      Final hand fit: small turns around the wrist (all three axes) and small
-      shifts, searched coarse to fine, keeping whatever puts the most hand
-      bone inside the skin. Rigid, so the hand keeps its shape.
-    */
-    {
-      const pivot = endCentre(hand, true)
-      const base = Float32Array.from(hand)
-      const apply = (q) => {
-        const rx = rotation([0, 1, 0], unit([0, Math.cos(q[0]), Math.sin(q[0])]))
-        const rz = rotation([0, 1, 0], unit([Math.sin(q[2]), Math.cos(q[2]), 0]))
-        const ry = rotation([1, 0, 0], unit([Math.cos(q[1]), 0, -Math.sin(q[1])]))
-        const out = new Float32Array(base.length)
-        for (let i = 0; i < base.length; i += 3) {
-          const d = [base[i] - pivot[0], base[i + 1] - pivot[1], base[i + 2] - pivot[2]]
-          out.set(add(add(pivot, ry(rz(rx(d)))), [q[3], q[4], q[5]]), i)
-        }
-        return out
-      }
-      let q = [0, 0, 0, 0, 0, 0]
-      const start = insideShare([base])
-      let best = start
-      for (const [ang, mv] of [[0.12, 0.012], [0.06, 0.006], [0.03, 0.003], [0.015, 0.0015]]) {
-        for (let pass = 0; pass < 2; pass++)
-          for (let k = 0; k < 6; k++) {
-            for (const dir of [-1, 1]) {
-              const t = [...q]
-              t[k] += dir * (k < 3 ? ang : mv)
-              const sc = insideShare([apply(t)])
-              if (sc > best + 1e-6) {
-                best = sc
-                q = t
-              }
-            }
-          }
-      }
-      hand.set(apply(q))
-      console.log(`hand search ${sign > 0 ? 'left' : 'right'}: inside skin ${(start * 100).toFixed(0)} % -> ${(best * 100).toFixed(0)} % (turns ${q.slice(0, 3).map((a) => ((a * 180) / Math.PI).toFixed(1)).join('/')} deg, shift ${q.slice(3).map((a) => (a * 100).toFixed(1)).join('/')} cm)`)
-    }
-
-    /* Joints */
-    const shoulder = endCentre(humPos, true)
-    const elbowH = endCentre(humPos, false)
-    const elbowF = endCentre(forePos, true)
-    const wristF = endCentre(forePos, false)
-    const wrist = endCentre(hand, true)
-    const lh = len(sub(elbowH, shoulder))
-    const lf = len(sub(wristF, elbowF))
-    /* Elbow height from the bone length ratio; its x/z from the skin arm (smoothed over 5 cm). Where the arm touches the torso the slice runs on into the body, so x is taken at most ARM_HALF in from the outer edge. */
-    const ARM_HALF = 0.042
-    const ey = shoulder[1] + (wrist[1] - shoulder[1]) * (lh / (lh + lf))
-    const c = [0, 0]
-    let m = 0
-    for (let y = ey - 0.025; y <= ey + 0.025; y += 0.01) {
-      const f = sliceAt(y)
-      if (!f) continue
-      c[0] += sign > 0 ? Math.max((f.x0 + f.x1) / 2, f.x1 - ARM_HALF) : Math.min((f.x0 + f.x1) / 2, f.x0 + ARM_HALF)
-      c[1] += (f.z0 + f.z1) / 2
-      m++
-    }
-    const straight = add(shoulder, mul(sub(wrist, shoulder), lh / (lh + lf)))
-    const elbow = m ? [c[0] / m, ey, c[1] / m] : straight
-    /* Then the elbow is moved (up to 3 cm across, 2 cm up/down) to where the most upper-arm and forearm bone lies inside the skin */
-    const tryElbow = (e) => [place(humPos, shoulder, elbowH, shoulder, e), place(forePos, elbowF, wristF, e, wrist)]
-    let bestElbow = elbow
-    const elbowStart = insideShare(tryElbow(elbow))
-    let elbowScore = elbowStart
-    for (const step of [0.01, 0.005, 0.0025]) {
-      for (let pass = 0; pass < 2; pass++)
-        for (const axis of [0, 2, 1])
-          for (const dir of [-1, 1]) {
-            const e = [...bestElbow]
-            e[axis] += dir * step
-            if (Math.abs(e[0] - elbow[0]) > 0.03 || Math.abs(e[2] - elbow[2]) > 0.03 || Math.abs(e[1] - elbow[1]) > 0.02) continue
-            const sc = insideShare(tryElbow(e))
-            if (sc > elbowScore + 1e-6) {
-              elbowScore = sc
-              bestElbow = e
-            }
-          }
-    }
-    console.log(`elbow search ${sign > 0 ? 'left' : 'right'}: inside skin ${(elbowStart * 100).toFixed(0)} % -> ${(elbowScore * 100).toFixed(0)} %, moved ${sub(bestElbow, elbow).map((v) => (v * 100).toFixed(1)).join('/')} cm`)
-    const [hum, fore] = tryElbow(bestElbow)
-    console.log(`arm joints ${sign > 0 ? 'left' : 'right'}: elbow ${bestElbow.map((v) => v.toFixed(3)).join(', ')}, humerus ${lh.toFixed(3)} -> ${len(sub(elbow, shoulder)).toFixed(3)} m, forearm ${lf.toFixed(3)} -> ${len(sub(wrist, elbow)).toFixed(3)} m`)
-    return { hum, fore, hand }
-  }
+  skinMesh = weldMesh(skinMesh.pos, skinMesh.idx, 1e-6)
+  const bpSkin = weldMesh(Array.from(fromLungs(bpSkinRaw)), bpSkinRaw.indices, 1e-6)
   const hands = handBoneConcepts(dir)
+  const posedBones = []
   for (const side of ["right", "left"]) {
     const r = side === "right"
     const girdle = concepts(r ? "FMA13322" : "FMA13323", r ? "FMA13395" : "FMA13396")
     const humerus = concepts(r ? "FMA23130" : "FMA23131")
     const forearm = concepts(r ? "FMA23464" : "FMA23465", r ? "FMA23467" : "FMA23468")
-    const arm = { positions: [...humerus.positions, ...forearm.positions], indices: [...humerus.indices, ...forearm.indices.map((i) => i + humerus.positions.length / 3)] }
     const hand = concepts(...hands.filter((h) => h.side === side).map((h) => h.concept))
-    const armPos = fromLungs(arm)
-    const handPos = fromLungs(hand)
-    const from = boundsOf([...armPos, ...handPos])
-    const sign = Math.sign(from.min[0] + from.max[0])
-    let outer = 0
-    let lowest = Infinity
-    for (let i = 0; i < skin.length; i += 3) {
-      if (skin[i] * sign < 0.3) continue
-      outer = Math.max(outer, skin[i] * sign)
-      lowest = Math.min(lowest, skin[i + 1])
-    }
-    const to = { min: [...from.min], max: [...from.max] }
-    if (sign > 0) to.max[0] = outer - SOFT_TISSUE
-    else to.min[0] = -(outer - SOFT_TISSUE)
-    to.min[1] = lowest + SOFT_TISSUE
-    console.log(`arm fit ${side}: outer x ${(from.max[0] * sign > 0 ? from.max[0] : -from.min[0]).toFixed(3)} → ${(outer - SOFT_TISSUE).toFixed(3)}, bottom ${from.min[1].toFixed(3)} → ${to.min[1].toFixed(3)}`)
+    const humPos = fromLungs(humerus)
+    const sign = Math.sign(boundsOf(humPos).min[0] + boundsOf(humPos).max[0])
     addPart(`shoulder_${side}`, fromLungs(girdle), girdle.indices, "musculoskeletal", 4000)
-    const fit = fitArmJointed(fromLungs(humerus), fromLungs(forearm), mapBounds(handPos, from, to), sign)
-    const armFit = new Float32Array(fit.hum.length + fit.fore.length)
-    armFit.set(fit.hum)
-    armFit.set(fit.fore, fit.hum.length)
-    addPart(`arm_${side}`, armFit, arm.indices, "musculoskeletal", 6000)
-    addPart(`hand_${side}`, fit.hand, hand.indices, "musculoskeletal", 6000)
+    const res = bp3dArm({ hra: skinMesh, bp: bpSkin, bones: { hum: humPos, fore: fromLungs(forearm), hand: fromLungs(hand) }, sign, side })
+    skinMesh = res.skin
+    for (let i = 0; i < res.armSkin.length; i += 3) armSkinKeys.add(res.armSkin.slice(i, i + 3).map((v) => Math.fround(v).toFixed(5)).join(","))
+    posedBones.push({ side, ...res.bones })
+    const armPos = new Float32Array(res.bones.hum.length + res.bones.fore.length)
+    armPos.set(res.bones.hum)
+    armPos.set(res.bones.fore, res.bones.hum.length)
+    addPart(`arm_${side}`, armPos, [...humerus.indices, ...forearm.indices.map((i) => i + humerus.positions.length / 3)], "musculoskeletal", 6000)
+    addPart(`hand_${side}`, res.bones.hand, hand.indices, "musculoskeletal", 6000)
+  }
+  {
+    const material = skinNodes[0].getMesh().listPrimitives()[0].getMaterial()
+    for (const n of skinNodes) n.dispose()
+    const buffer = root.listBuffers()[0]
+    const position = doc.createAccessor("skin_position").setType("VEC3").setArray(new Float32Array(skinMesh.pos)).setBuffer(buffer)
+    const index = doc.createAccessor("skin_index").setType("SCALAR").setArray(new Uint32Array(skinMesh.idx)).setBuffer(buffer)
+    const prim = doc.createPrimitive().setAttribute("POSITION", position).setIndices(index).setMaterial(material)
+    scene.addChild(doc.createNode("VH_M_skin").setMesh(doc.createMesh("VH_M_skin").addPrimitive(prim)))
+    const share = insideTester(skinMesh.pos, skinMesh.idx)
+    for (const b of posedBones) console.log(`inside skin ${b.side}: humerus ${(share(b.hum) * 100).toFixed(1)} %, forearm ${(share(b.fore) * 100).toFixed(1)} %, hand ${(share(b.hand) * 100).toFixed(1)} %`)
+    console.log(`skin with BodyParts3D arms: ${(skinMesh.idx.length / 3).toLocaleString()} tris`)
   }
 
   doc.createMaterial("whole-body:stomach").setBaseColorFactor([0.85, 0.55, 0.5, 1]).setRoughnessFactor(0.5).setMetallicFactor(0)
@@ -714,6 +415,9 @@ const REGIONS = {
   'whole-body:kidney': { nodes: ['VH_M_upper_urinary_tract'], targetTris: 10000, maxError: 0.5, color: [0.55, 0.2, 0.2, 1] },
   'whole-body:bladder': { nodes: ['VH_M_urinary_bladder'], targetTris: 2500, color: [0.85, 0.75, 0.5, 1] },
 }
+
+/* Skin vertices of the BodyParts3D arms (position keys), kept out of the slimming */
+const armSkinKeys = new Set()
 
 const TARGET_HEIGHT = 1.8
 
@@ -806,7 +510,7 @@ const final = getBounds(scene)
 console.log('final bounds min', final.min.map((v) => v.toFixed(3)), 'max', final.max.map((v) => v.toFixed(3)))
 
 if (bp3dDir) await addBodyParts3D(bp3dDir)
-if (!process.argv.includes("--no-slim")) await slimSkin(doc)
+if (!process.argv.includes("--no-slim")) await slimSkin(doc, console.log, armSkinKeys)
 if (!process.argv.includes("--no-mannequin")) await smoothGroin(doc)
 
 await doc.transform(quantize())

@@ -4,7 +4,9 @@
   - Works in final body space (Y up, feet at y = 0, ~1.8 m tall, facing +z).
   - Torso and legs are scaled horizontally (x/z) toward a per-slice centre;
     the amount follows SLIM_KEYS (most at the waist, none at head/hands/feet).
-  - Arms are left alone (the model has no arm bones to protect them against).
+  - Arms are left alone: the outer arm by distance from the torso, and the
+    BodyParts3D arm skin (frozenKeys: vertex positions) entirely, fading out
+    over a few vertex rings around the shoulder seam.
   - Safety: a skin vertex is never moved closer than MARGIN to any organ or bone;
     if the full move would break that, the largest safe partial move is used.
 */
@@ -209,7 +211,7 @@ export async function smoothGroin(doc, log = console.log) {
   log(`groin smoothed: ${freed.toLocaleString()} skin vertices reshaped`)
 }
 
-export async function slimSkin(doc, log = console.log) {
+export async function slimSkin(doc, log = console.log, frozenKeys = new Set()) {
   const root = doc.getRoot()
   const nodes = meshNodes(root)
   const skins = nodes.filter(isSkin)
@@ -226,7 +228,17 @@ export async function slimSkin(doc, log = console.log) {
     for (const prim of node.getMesh().listPrimitives()) {
       const { canon, pos: world, neighbours } = weldedView(prim, m)
 
-      const armWeight = (p) => {
+      /* 1 on the BodyParts3D arm skin, fading over ~8 vertex rings into the torso */
+      let frozen = world.map((p) => (frozenKeys.has(p.map((v) => v.toFixed(5)).join(',')) ? 1 : 0))
+      const isArm = frozen.slice()
+      for (let it = 0; it < 8; it++) {
+        frozen = frozen.map((w, i) => {
+          if (isArm[i]) return 1
+          const nb = neighbours[i]
+          return nb.length ? Math.max(w, nb.reduce((m, j) => Math.max(m, frozen[j]), 0) * 0.82) : w
+        })
+      }
+      const armWeight0 = (p) => {
         if (p[1] < 0.75 || p[1] > 1.5) return 0
         const edge = Math.max(halfWidth(p[1]) + 0.05, MIN_ARM_X)
         return smooth(Math.min(1, Math.max(0, (Math.abs(p[0]) - edge) / 0.04)))
@@ -235,7 +247,7 @@ export async function slimSkin(doc, log = console.log) {
 
       const slices = new Map()
       for (const p of world) {
-        if (armWeight(p) > 0.5) continue
+        if (armWeight0(p) > 0.5) continue
         const key = `${Math.round(p[1] * 100)}:${legSide(p)}`
         const s = slices.get(key) ?? { sx: 0, n: 0, minZ: Infinity, maxZ: -Infinity }
         s.sx += p[0]
@@ -278,8 +290,9 @@ export async function slimSkin(doc, log = console.log) {
         return lo
       }
 
-      let disp = world.map((p) => {
-        const f = slimAt(p[1] / HEIGHT) * (1 - armWeight(p))
+      const armWeight = (p, i) => Math.max(armWeight0(p), frozen[i])
+      let disp = world.map((p, i) => {
+        const f = slimAt(p[1] / HEIGHT) * (1 - armWeight(p, i))
         if (f <= 0.001) return [0, 0]
         const c = centreOf(p)
         if (!c) return [0, 0]
@@ -304,7 +317,7 @@ export async function slimSkin(doc, log = console.log) {
 
       const out = world.map((p, i) => {
         total++
-        const d = disp[i]
+        const d = disp[i].map((v) => v * (1 - frozen[i]))
         if (Math.abs(d[0]) + Math.abs(d[1]) < 1e-5) return p
         const k = safeT(p, d)
         if (k < 1) clamped++
