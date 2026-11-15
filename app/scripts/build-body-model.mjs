@@ -183,8 +183,34 @@ async function addBodyParts3D(dir) {
     chest skin; the back half does not move.
   */
   const ribPos = mapBounds(toYUp(rib.positions, mirrorX), bpLungs, hraLungs)
+  /*
+    The lungs end well above the bottom of a real rib cage, so the cage is
+    stretched down (top fixed) until its lowest rib is RIB_ABOVE_HIP above
+    our iliac crest (highest hip bone point beside the spine).
+  */
   {
-    const RIB_TISSUE = 0.012
+    const RIB_ABOVE_HIP = 0.08
+    let crest = -Infinity
+    for (const n of nodesOf("musculoskeletal")) {
+      const m = n.getWorldMatrix()
+      for (const p of n.getMesh().listPrimitives()) {
+        const a = p.getAttribute("POSITION")
+        const v = [0, 0, 0]
+        for (let i = 0; i < a.getCount(); i++) {
+          a.getElement(i, v)
+          const x = m[0] * v[0] + m[4] * v[1] + m[8] * v[2] + m[12]
+          const y = m[1] * v[0] + m[5] * v[1] + m[9] * v[2] + m[13]
+          if (Math.abs(x) > 0.07 && y < hraLungs.min[1]) crest = Math.max(crest, y)
+        }
+      }
+    }
+    const rb = boundsOf(ribPos)
+    const k = (rb.max[1] - (crest + RIB_ABOVE_HIP)) / (rb.max[1] - rb.min[1])
+    if (k > 1) for (let i = 1; i < ribPos.length; i += 3) ribPos[i] = rb.max[1] - (rb.max[1] - ribPos[i]) * k
+    console.log(`rib cage: iliac crest ${crest.toFixed(3)} m, bottom ${rb.min[1].toFixed(3)} -> ${(rb.max[1] - (rb.max[1] - rb.min[1]) * Math.max(1, k)).toFixed(3)} m (x${k.toFixed(2)} tall)`)
+  }
+  {
+    const RIB_TISSUE = 0.016
     const rb = boundsOf(ribPos)
     const zMid = (rb.min[2] + rb.max[2]) / 2
     const y0 = Math.floor(rb.min[1] * 100)
@@ -193,14 +219,16 @@ async function addBodyParts3D(dir) {
     const ribFront = Array(n).fill(-Infinity)
     for (let i = 0; i < hraSkinPts.length; i += 3) {
       const k = Math.floor(hraSkinPts[i + 1] * 100) - y0
-      if (k >= 0 && k < n && Math.abs(hraSkinPts[i]) < 0.06) skinFront[k] = Math.max(skinFront[k], hraSkinPts[i + 2])
+      /* Front skin only; each point counts for its slice and the two next to it (the skin mesh is sparse) */
+      if (Math.abs(hraSkinPts[i]) >= 0.06 || hraSkinPts[i + 2] <= 0) continue
+      for (let j = Math.max(0, k - 1); j <= Math.min(n - 1, k + 1); j++) skinFront[j] = Math.max(skinFront[j], hraSkinPts[i + 2])
     }
     for (let i = 0; i < ribPos.length; i += 3) {
       const k = Math.floor(ribPos[i + 1] * 100) - y0
       ribFront[k] = Math.max(ribFront[k], ribPos[i + 2])
     }
     /* Squeeze factor per slice: lowest within +-1 cm, then averaged over +-2 cm so the cage stays smooth */
-    const raw = ribFront.map((f, k) => (f > zMid && Number.isFinite(skinFront[k]) ? Math.min(1, (skinFront[k] - RIB_TISSUE - zMid) / (f - zMid)) : 1))
+    const raw = ribFront.map((f, k) => (f > zMid && Number.isFinite(skinFront[k]) ? Math.max(0.5, Math.min(1, (skinFront[k] - RIB_TISSUE - zMid) / (f - zMid))) : 1))
     const squeeze = raw.map((_, k) => {
       let m = 1
       for (let j = Math.max(0, k - 1); j <= Math.min(n - 1, k + 1); j++) m = Math.min(m, raw[j])
