@@ -200,12 +200,15 @@ export function SolarNav({ route }: { route: Route }) {
                 {bottom ? (
                   /* At the bottom the name curves over the top of its bubble, no box */
                   <svg className="solar-arc-label" viewBox="-40 -40 80 80" aria-hidden="true">
+                    {/* Tilted halfway between straight up and away from the sun, so the end names lean outward instead of into the next planet */}
+                    <g transform={`rotate(${((90 - deg) / 2).toFixed(1)})`}>
                     <path id={`${id}-arc-${i}`} d={ARC_PATH} fill="none" />
                     <text>
                       <textPath href={`#${id}-arc-${i}`} startOffset="50%" textAnchor="middle">
                         {p.short}
                       </textPath>
                     </text>
+                    </g>
                   </svg>
                 ) : (
                   <span className="solar-label">{p.label}</span>
