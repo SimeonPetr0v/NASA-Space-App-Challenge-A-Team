@@ -1,48 +1,64 @@
 import { useEffect, useRef } from 'react'
 
 /*
-  Live pulse trace for the measuring screen. Drawn on a canvas every screen
-  frame and positioned by time, so it scrolls smoothly even when the camera
-  only delivers 15 frames a second. The camera loop pushes raw samples into
-  `feed`; a real-time filter removes the slow baseline and adds the rate at
-  which the fingertip darkens (blood arriving), so each beat shows as a
-  sharp spike rather than a soft wave.
+  Live pulse trace for the measuring screen, in the style of the app's
+  heartbeat mark: a flat line with one beat shape (small rise, dip, tall
+  spike, back to the line) at each heartbeat the camera detects. Beats are
+  found in real time from how fast the fingertip darkens (blood arriving),
+  so each shape appears when the heart actually beats. It is a picture of
+  the beat timing, not an ECG. Drawn on a canvas every screen frame and
+  placed by time, so it scrolls smoothly at any camera frame rate.
 */
 
 export type TraceFeed = { push: (t: number, red: number, green: number) => void; clear: () => void }
 
 const WINDOW_MS = 4000
+/* Beats closer than this are one beat (200 bpm) */
+const REFRACTORY_MS = 300
+/* The beat shape: [ms relative to the beat, height as a share of the half height; up is positive] */
+const BEAT: [number, number][] = [
+  [-110, 0],
+  [-80, 0.28],
+  [-55, -0.42],
+  [-10, 0.95],
+  [35, 0],
+]
 
-/* Uses the text colour of its container (currentColor), so it follows each theme */
 export function PulseTrace({ feedRef }: { feedRef: React.MutableRefObject<TraceFeed | null> }) {
   const canvas = useRef<HTMLCanvasElement>(null)
 
   useEffect(() => {
-    const pts: { t: number; v: number }[] = []
+    const beats: number[] = []
     let base = NaN
-    let smooth = 0
     let lastHp = 0
-    let scale = 0
+    let level = 0
+    let lastBeat = -Infinity
+    let armed = true
     feedRef.current = {
       push: (t, red, green) => {
         /* Red is saturated on bright screens and torches; then the beat is in green only */
         const x = red > 248 ? green : red + green
         base = Number.isNaN(base) ? x : base + (x - base) * 0.1
-        /* Darkening = blood arriving. Its rate of change marks the beat, so it is added on top of the level to draw a sharp spike per beat */
         const hp = base - x
         const rise = Math.max(0, hp - lastHp)
         lastHp = hp
-        const v = 0.35 * hp + 2.2 * rise
-        smooth += (v - smooth) * 0.75
-        pts.push({ t, v: smooth })
-        while (pts.length && pts[0].t < t - WINDOW_MS - 500) pts.shift()
+        /* Adaptive threshold: half of the recent strongest rise, slowly forgetting */
+        level = Math.max(rise, level * 0.97)
+        if (armed && level > 0 && rise > 0.5 * level && t - lastBeat > REFRACTORY_MS) {
+          beats.push(t)
+          lastBeat = t
+          armed = false
+        }
+        if (rise < 0.2 * level) armed = true
+        while (beats.length && beats[0] < t - WINDOW_MS - 500) beats.shift()
       },
       clear: () => {
-        pts.length = 0
+        beats.length = 0
         base = NaN
-        smooth = 0
         lastHp = 0
-        scale = 0
+        level = 0
+        lastBeat = -Infinity
+        armed = true
       },
     }
     let raf = 0
@@ -59,33 +75,23 @@ export function PulseTrace({ feedRef }: { feedRef: React.MutableRefObject<TraceF
         const ctx = c.getContext('2d')!
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
         ctx.clearRect(0, 0, w, h)
-        const color = getComputedStyle(c).color
-        ctx.globalAlpha = 0.15
-        ctx.strokeStyle = color
-        ctx.lineWidth = 1
-        ctx.beginPath()
-        ctx.moveTo(0, h / 2)
-        ctx.lineTo(w, h / 2)
-        ctx.stroke()
-        ctx.globalAlpha = 1
+        ctx.strokeStyle = getComputedStyle(c).color
+        ctx.lineWidth = 3
+        ctx.lineJoin = 'miter'
+        ctx.miterLimit = 8
+        ctx.lineCap = 'round'
         const now = performance.now()
-        const recent = pts.filter((p) => p.t >= now - WINDOW_MS)
-        const peak = recent.reduce((m, p) => Math.max(m, Math.abs(p.v)), 0)
-        scale = Math.max(peak, scale * 0.985)
-        if (recent.length > 1 && scale > 0) {
-          ctx.lineWidth = 2.5
-          ctx.lineJoin = 'miter'
-          ctx.miterLimit = 6
-          ctx.lineCap = 'round'
-          ctx.beginPath()
-          recent.forEach((p, i) => {
-            const x = w - ((now - p.t) / WINDOW_MS) * w
-            const y = h / 2 - (p.v / scale) * (h * 0.42)
-            if (i) ctx.lineTo(x, y)
-            else ctx.moveTo(x, y)
-          })
-          ctx.stroke()
+        const xOf = (t: number) => w - ((now - t) / WINDOW_MS) * w
+        const mid = h / 2
+        const amp = h * 0.44
+        ctx.beginPath()
+        ctx.moveTo(0, mid)
+        for (const b of beats) {
+          if (b + BEAT[BEAT.length - 1][0] < now - WINDOW_MS) continue
+          for (const [ms, y] of BEAT) ctx.lineTo(xOf(b + ms), mid - y * amp)
         }
+        ctx.lineTo(w, mid)
+        ctx.stroke()
       }
       raf = requestAnimationFrame(draw)
     }
