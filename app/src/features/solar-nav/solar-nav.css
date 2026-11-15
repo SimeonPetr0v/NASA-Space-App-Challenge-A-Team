@@ -388,8 +388,9 @@
 */
 .solar[data-dock='bottom'] {
   --sun: 96px;
-  --radius: 162px;
-  --planet: 42px;
+  /* Narrow phones: the arc shrinks so the end planets stay 12 px inside the screen (ends sit at 22 deg, 2 x cos 22 = 1.854) */
+  --radius: min(162px, calc((100vw - var(--planet) - 24px) / 1.854));
+  --planet: 40px;
   top: auto;
   right: auto;
   bottom: env(safe-area-inset-bottom, 0px);

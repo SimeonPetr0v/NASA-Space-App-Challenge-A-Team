@@ -80,6 +80,8 @@ export function TotPage() {
   const [status, setStatus] = useState<Status>(current ? 'ready' : 'checking')
   const [progress, setProgress] = useState({ pct: 0, text: '' })
   const [error, setError] = useState('')
+  /* The raw error text, shown small under the plain message, to tell what failed */
+  const [errorDetail, setErrorDetail] = useState('')
   const [modelId, setModelId] = useState(current?.modelId ?? readModel())
   /* gpu: WebLLM on the graphics chip; cpu: the smaller backup model on the processor (no WebGPU) */
   const [engineKind, setEngineKind] = useState<'gpu' | 'cpu'>(current?.runner.kind ?? 'gpu')
@@ -132,6 +134,7 @@ export function TotPage() {
       setStatus('ready')
     } catch (e) {
       setError(explainError(e))
+      setErrorDetail(e instanceof Error ? e.message : String(e))
       setStatus('error')
     }
   }
@@ -352,13 +355,15 @@ export function TotPage() {
                     First start downloads about {engineKind === 'cpu' ? CPU_MODEL.downloadGB : model.downloadGB} GB once. After that TOT works without internet.
                   </p>
                   <Action variant="primary" onClick={() => void start()}>
-                    <Download aria-hidden="true" /> Start TOT
+                    <Download aria-hidden="true" /> {status === 'error' ? 'Try again' : 'Start TOT'}
                   </Action>
                 </>
               )}
               {status === 'error' && (
                 <p role="alert" className="text-status-danger-ink text-xs">
-                  Could not start the model: {error}
+                  {error}
+                  {errorDetail && <span className="text-muted-foreground mt-1 block break-words font-mono text-[11px]">{errorDetail.slice(0, 300)}</span>}
+                  <span className="text-muted-foreground mt-1 block">Parts already downloaded are kept, so Try again continues where it stopped.</span>
                 </p>
               )}
               {status === 'loading' && (

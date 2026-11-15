@@ -20,7 +20,8 @@ export default defineConfig({
         /* TOT's processor backup: the ONNX runtime (.wasm/.mjs) is kept after its first download so TOT also works offline */
         runtimeCaching: [
           {
-            urlPattern: ({ url }) => url.pathname.endsWith('.wasm') || (url.hostname === 'cdn.jsdelivr.net' && url.pathname.includes('onnxruntime-web')),
+            /* Only Khonsu's own .wasm and the ONNX runtime on jsDelivr; model downloads (Hugging Face, GitHub) are never touched */
+            urlPattern: ({ url, sameOrigin }) => (sameOrigin && url.pathname.endsWith('.wasm')) || (url.hostname === 'cdn.jsdelivr.net' && url.pathname.includes('onnxruntime-web')),
             handler: 'CacheFirst',
             options: { cacheName: 'tot-runtime', expiration: { maxEntries: 12 }, cacheableResponse: { statuses: [0, 200] } },
           },
