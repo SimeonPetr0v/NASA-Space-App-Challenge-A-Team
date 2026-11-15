@@ -72,3 +72,35 @@ export const SUGGESTED = [
   'Show me my radiation exposure.',
   'What should I discuss with the medical officer?',
 ]
+
+/** Small models can loop ("- Exercise: 95 min" again and again): keep only the first copy of each line */
+export function dropRepeatedLines(text: string) {
+  const seen = new Set<string>()
+  return text
+    .split('\n')
+    .filter((line) => {
+      const key = line.toLowerCase().replace(/[\s*•.-]+/g, ' ').trim()
+      if (key.length < 4) return true
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .join('\n')
+}
+
+/**
+  Grounded mode: the model may only explain. Keep up to two of its sentences
+  that carry no numbers and are not list items; the numbers are already in
+  "Measured", written by Khonsu.
+*/
+export function explanationOnly(text: string, fallback = '') {
+  const sentences = text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !/^([-•*]|\d+[.)])/.test(l) && !/:$/.test(l))
+    .join(' ')
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 12 && !/\d/.test(s) && !/:\s*$/.test(s))
+  return sentences.slice(0, 2).join(' ') || fallback
+}

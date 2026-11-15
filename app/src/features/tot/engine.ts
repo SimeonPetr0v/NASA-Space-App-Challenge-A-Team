@@ -1,3 +1,4 @@
+import { dropRepeatedLines } from './prompt'
 import type { InitProgressReport, MLCEngineInterface } from '@mlc-ai/web-llm'
 
 /*
@@ -64,11 +65,11 @@ export function gpuRunner(engine: Engine, worker: Worker): Runner {
   return {
     kind: 'gpu',
     stream: async (messages, max, onText) => {
-      const chunks = await engine.chat.completions.create({ messages, stream: true, temperature: 0.3, max_tokens: max })
+      const chunks = await engine.chat.completions.create({ messages, stream: true, temperature: 0.3, max_tokens: max, frequency_penalty: 0.4, repetition_penalty: 1.1 })
       let text = ''
       for await (const chunk of chunks) {
         text += chunk.choices[0]?.delta?.content ?? ''
-        onText(text)
+        onText(dropRepeatedLines(text))
       }
     },
     interrupt: () => engine.interruptGenerate(),
