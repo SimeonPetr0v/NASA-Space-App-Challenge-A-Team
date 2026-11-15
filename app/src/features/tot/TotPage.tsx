@@ -13,7 +13,7 @@ import { useStore } from '@/state/store'
 import { useHealth } from '@/state/useHealth'
 import { CPU_MODEL, cpuModelCached, explainError, gpuInfo, gpuRunner, loadCpuRunner, loadEngine, modelCached, type ChatMessage, type Runner } from './engine'
 import { buildFacts } from './facts'
-import { cpuPrompt, measuredFor, SUGGESTED, systemPrompt, topicsOf } from './prompt'
+import { cpuPrompt, explanationOnly, measuredFor, SUGGESTED, systemPrompt, topicsOf } from './prompt'
 import { retrieve } from './retrieve'
 
 /*
@@ -62,7 +62,7 @@ function Answer({ text }: { text: string }) {
       {text.split('\n').map((line, i) => {
         const clean = line.replace(/\*\*/g, '').replace(/^#+\s*/, '').trim()
         if (!clean) return null
-        const heading = (/^(measured|trend|possible explanations|what to do)\b/i.test(clean) && clean.length < 40) || /^#+\s/.test(line) || /^\*\*[^*]+\*\*:?$/.test(line.trim())
+        const heading = (/^(measured|trend|possible explanations|background|what to do)\b/i.test(clean) && clean.length < 40) || /^#+\s/.test(line) || /^\*\*[^*]+\*\*:?$/.test(line.trim())
         if (heading) return <p key={i} className="label text-muted-foreground mt-2 first:mt-0">{clean.replace(/:$/, '')}</p>
         return (
           <p key={i} className={cn(/^[-*•]\s/.test(clean) && 'pl-3')}>
@@ -175,7 +175,8 @@ export function TotPage() {
     const question = q.trim()
     if (!question || busy || !current) return
     setInput('')
-    const cpu = current.runner.kind === 'cpu'
+    /* The processor backup and the smallest GPU model only explain; Khonsu writes the numbers */
+    const cpu = current.runner.kind === 'cpu' || TOT_MODELS.some((m) => m.grounded && (m.id === current?.modelId || m.f32Id === current?.modelId))
     const docs = retrieve(question, facts.topics).slice(0, cpu ? 1 : 3)
     const sources = docs.map((d) => ({ title: d.title, label: d.sourceLabel, url: d.sourceUrl }))
     const at = new Date().toISOString()
@@ -193,13 +194,17 @@ export function TotPage() {
         const ids = topicsOf(question)
         const off = health.summary.priority.find((a) => a.guidance && (!ids.length || ids.includes(a.indicatorId)))
         const todo = off?.guidance ? `${off.guidance.doNow[0]} Re-check in ${off.guidance.recheckIn}.` : ESCALATION_TEXT[health.summary.escalation].detail
-        const head = `Measured\n${measured.map((l) => (l.startsWith('- ') ? l : `- ${l}`)).join('\n')}\n\nPossible explanations (AI)\n`
+        const block = `Measured\n${measured.map((l) => (l.startsWith('- ') ? l : `- ${l}`)).join('\n')}\n\n`
+        const head = `${block}Possible explanations (AI)\n`
         let said = ''
-        await current.runner.stream([{ role: 'system', content: cpuPrompt(measured, docs[0]) }, { role: 'user', content: question }], 70, (text) => {
+        await current.runner.stream([{ role: 'system', content: cpuPrompt(measured, docs[0]) }, { role: 'user', content: question }], current.runner.kind === 'cpu' ? 70 : 90, (text) => {
           said = text
-          setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text: head + text }])
+          setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text: head + explanationOnly(text, '…') }])
         })
-        setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text: `${head}${said.trim()}\n\nWhat to do\n${todo}` }])
+        const explained = explanationOnly(said)
+        /* If the model only repeated numbers, fall back to the first sentence of the matching library note */
+        const fallback = docs[0] ? `${docs[0].text.split(/(?<=[.!?])\s+/)[0]} [1]` : 'No extra explanation; see Measured.'
+        setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text: `${block}${explained ? `Possible explanations (AI)\n${explained}` : `Background (library)\n${fallback}`}\n\nWhat to do\n${todo}` }])
       } else {
         await current.runner.stream([{ role: 'system', content: systemPrompt(facts, docs) }, ...past, { role: 'user', content: question }], 380, (text) =>
           setMessages((m) => [...m.slice(0, -1), { ...m.at(-1)!, text }]),
